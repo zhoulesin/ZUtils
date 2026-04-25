@@ -11,6 +11,7 @@ class GetClipboardFunction : ZFunction {
     override val info = FunctionInfo(
         name = "getClipboard",
         description = "Read the current text from the system clipboard",
+        outputType = OutputType.TEXT,
     )
 
     override suspend fun execute(context: ExecutionContext, args: JsonObject): ZResult {

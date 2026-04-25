@@ -14,6 +14,7 @@ class GetScreenInfoFunction : ZFunction {
     override val info = FunctionInfo(
         name = "getScreenInfo",
         description = "Get screen resolution, density, and refresh rate",
+        outputType = OutputType.OBJECT,
     )
 
     override suspend fun execute(context: ExecutionContext, args: JsonObject): ZResult {

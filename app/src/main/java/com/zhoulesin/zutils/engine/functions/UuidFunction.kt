@@ -9,6 +9,7 @@ class UuidFunction : ZFunction {
     override val info = FunctionInfo(
         name = "uuid",
         description = "Generate a random UUID v4 string",
+        outputType = OutputType.TEXT,
     )
 
     override suspend fun execute(context: ExecutionContext, args: JsonObject): ZResult {

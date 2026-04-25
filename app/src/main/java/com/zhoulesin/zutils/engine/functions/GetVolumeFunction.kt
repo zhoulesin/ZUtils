@@ -10,6 +10,7 @@ class GetVolumeFunction : ZFunction {
     override val info = FunctionInfo(
         name = "getVolume",
         description = "Get the current media volume level (0 - max)",
+        outputType = OutputType.OBJECT,
     )
 
     override suspend fun execute(context: ExecutionContext, args: JsonObject): ZResult {

@@ -26,6 +26,7 @@ class Base64Function : ZFunction {
                 required = true,
             ),
         ),
+        outputType = OutputType.TEXT,
     )
 
     override suspend fun execute(context: ExecutionContext, args: JsonObject): ZResult {

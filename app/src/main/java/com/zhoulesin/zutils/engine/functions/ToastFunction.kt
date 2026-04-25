@@ -20,6 +20,7 @@ class ToastFunction : ZFunction {
                 required = true,
             )
         ),
+        outputType = OutputType.NONE,
     )
 
     override suspend fun execute(context: ExecutionContext, args: JsonObject): ZResult {

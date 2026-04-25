@@ -10,6 +10,7 @@ class GetStorageInfoFunction : ZFunction {
     override val info = FunctionInfo(
         name = "getStorageInfo",
         description = "Get internal storage total and available space in GB",
+        outputType = OutputType.OBJECT,
     )
 
     override suspend fun execute(context: ExecutionContext, args: JsonObject): ZResult {

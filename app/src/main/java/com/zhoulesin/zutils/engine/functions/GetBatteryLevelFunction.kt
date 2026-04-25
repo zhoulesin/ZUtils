@@ -14,6 +14,7 @@ class GetBatteryLevelFunction : ZFunction {
         name = "getBatteryLevel",
         description = "Get the current battery level as a percentage (0-100)",
         permissions = emptyList(),
+        outputType = OutputType.NUMBER,
     )
 
     override suspend fun execute(context: ExecutionContext, args: JsonObject): ZResult {

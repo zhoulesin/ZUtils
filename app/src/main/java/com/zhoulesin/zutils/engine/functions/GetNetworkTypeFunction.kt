@@ -13,6 +13,7 @@ class GetNetworkTypeFunction : ZFunction {
         name = "getNetworkType",
         description = "Check current network type: wifi, mobile, or none",
         permissions = listOf(android.Manifest.permission.ACCESS_NETWORK_STATE),
+        outputType = OutputType.OBJECT,
     )
 
     override suspend fun execute(context: ExecutionContext, args: JsonObject): ZResult {

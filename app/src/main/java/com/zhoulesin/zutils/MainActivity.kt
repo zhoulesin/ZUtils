@@ -30,6 +30,7 @@ import com.zhoulesin.zutils.engine.workflow.WorkflowResult
 import com.zhoulesin.zutils.engine.workflow.WorkflowStep
 import com.zhoulesin.zutils.plugin.DefaultDexLoader
 import com.zhoulesin.zutils.ui.screen.FunctionsScreen
+import com.zhoulesin.zutils.ui.screen.WorkflowBuilderScreen
 import com.zhoulesin.zutils.ui.screen.WorkflowsScreen
 import com.zhoulesin.zutils.ui.theme.ZUtilsTheme
 import kotlinx.coroutines.launch
@@ -88,6 +89,24 @@ private fun MainScreen(engine: Engine) {
     var tab by remember { mutableStateOf(Tab.EXECUTE) }
     val history = remember { mutableStateListOf<Pair<String, ResultContent>>() }
     val scope = rememberCoroutineScope()
+    var showBuilder by remember { mutableStateOf(false) }
+
+    if (showBuilder) {
+        WorkflowBuilderScreen(
+            functions = engine.registry.getAllInfos(),
+            onBack = { showBuilder = false },
+            onExecute = { workflow ->
+                showBuilder = false
+                scope.launch {
+                    val label = workflow.summary ?: workflow.steps.joinToString(" + ") { it.function }
+                    val result = runQueryRaw(engine, workflow)
+                    history.add(0, label to result)
+                    tab = Tab.EXECUTE
+                }
+            },
+        )
+        return
+    }
 
     Scaffold(
         topBar = {
@@ -124,6 +143,7 @@ private fun MainScreen(engine: Engine) {
         when (tab) {
             Tab.EXECUTE -> ExecuteScreen(engine, history, Modifier.padding(padding))
             Tab.WORKFLOWS -> WorkflowsScreen(
+                functions = engine.registry.getAllInfos(),
                 onExecute = { workflow ->
                     scope.launch {
                         val label = workflow.summary ?: workflow.steps.joinToString(" + ") { it.function }
@@ -132,6 +152,7 @@ private fun MainScreen(engine: Engine) {
                         tab = Tab.EXECUTE
                     }
                 },
+                onNewWorkflow = { showBuilder = true },
                 modifier = Modifier.padding(padding),
             )
             Tab.FUNCTIONS -> FunctionsScreen(engine.registry.getAllInfos(), Modifier.padding(padding))

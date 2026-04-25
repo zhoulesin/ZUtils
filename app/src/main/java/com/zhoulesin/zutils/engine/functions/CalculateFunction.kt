@@ -17,6 +17,7 @@ class CalculateFunction : ZFunction {
                 required = true,
             )
         ),
+        outputType = OutputType.NUMBER,
     )
 
     override suspend fun execute(context: ExecutionContext, args: JsonObject): ZResult {

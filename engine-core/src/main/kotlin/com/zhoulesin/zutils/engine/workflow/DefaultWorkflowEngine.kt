@@ -6,6 +6,8 @@ import com.zhoulesin.zutils.engine.core.PermissionChecker
 import com.zhoulesin.zutils.engine.core.ZResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlin.system.measureTimeMillis
 
 class DefaultWorkflowEngine : WorkflowEngine {
@@ -17,6 +19,7 @@ class DefaultWorkflowEngine : WorkflowEngine {
         val stepResults = mutableListOf<StepResult>()
         var allSucceeded = true
         val permissionChecker = PermissionChecker(context.androidContext)
+        val pipelineResults = mutableMapOf<Int, JsonElement>()
 
         for ((index, step) in workflow.steps.withIndex()) {
             if (context.cancelled) break
@@ -55,10 +58,17 @@ class DefaultWorkflowEngine : WorkflowEngine {
                 break
             }
 
+            val mergedArgs = if (step.pipeline.isNotEmpty()) {
+                val pipelineValues = PipelineResolver.resolve(step.pipeline, pipelineResults)
+                JsonObject(step.args + pipelineValues)
+            } else {
+                step.args
+            }
+
             var stepResult: ZResult
             val duration = measureTimeMillis {
                 stepResult = try {
-                    function.execute(context, step.args)
+                    function.execute(context, mergedArgs)
                 } catch (e: SecurityException) {
                     ZResult.fail("Permission denied: ${e.message}", "PERMISSION_DENIED", recoverable = true)
                 } catch (e: Exception) {
@@ -74,6 +84,10 @@ class DefaultWorkflowEngine : WorkflowEngine {
                     durationMs = duration,
                 )
             )
+
+            if (stepResult is ZResult.Success) {
+                pipelineResults[index] = stepResult.data
+            }
 
             if (stepResult is ZResult.Error) {
                 allSucceeded = false
