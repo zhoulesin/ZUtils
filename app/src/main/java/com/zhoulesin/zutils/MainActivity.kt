@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Base64
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -31,6 +32,8 @@ import com.zhoulesin.zutils.engine.functions.*
 import com.zhoulesin.zutils.functions.calculate.CalculateFunction
 import com.zhoulesin.zutils.functions.time.GetCurrentTimeFunction
 import com.zhoulesin.zutils.functions.uuid.UuidFunction
+import com.zhoulesin.zutils.llm.VolcengineLlmClient
+import com.zhoulesin.zutils.engine.llm.LlmClient
 import com.zhoulesin.zutils.engine.workflow.Workflow
 import com.zhoulesin.zutils.engine.workflow.WorkflowResult
 import com.zhoulesin.zutils.engine.workflow.WorkflowStep
@@ -106,6 +109,44 @@ private fun MainScreen(engine: Engine) {
     val scope = rememberCoroutineScope()
     var showBuilder by remember { mutableStateOf(false) }
     val storage = remember { WorkflowStorage(engine.androidContext) }
+    val prefs = remember { engine.androidContext.getSharedPreferences("zutils", 0) }
+    var savedKey by remember { mutableStateOf(prefs.getString("api_key", "") ?: "") }
+    var showKeyDialog by remember { mutableStateOf(false) }
+    var keyInput by remember { mutableStateOf(savedKey) }
+    val llmClient = remember(savedKey) {
+        if (savedKey.isNotBlank()) VolcengineLlmClient(apiKey = savedKey) else null
+    }
+
+    if (showKeyDialog) {
+        AlertDialog(
+            onDismissRequest = { showKeyDialog = false },
+            title = { Text("火山引擎 API Key") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = keyInput,
+                        onValueChange = { keyInput = it },
+                        label = { Text("API Key") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text("获取地址: 火山引擎方舟 → API Key 管理", style = MaterialTheme.typography.labelSmall)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    prefs.edit().putString("api_key", keyInput).apply()
+                    savedKey = keyInput
+                    showKeyDialog = false
+                }) {
+                    Text(if (savedKey.isNotBlank()) "更新" else "保存")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showKeyDialog = false }) { Text("取消") }
+            },
+        )
+    }
 
     if (showBuilder) {
         WorkflowBuilderScreen(
@@ -113,11 +154,8 @@ private fun MainScreen(engine: Engine) {
             onSave = { saved ->
                 scope.launch {
                     storage.saveFromSteps(
-                        id = saved.id,
-                        title = saved.title,
-                        desc = saved.description,
-                        type = saved.type,
-                        steps = saved.steps,
+                        id = saved.id, title = saved.title, desc = saved.description,
+                        type = saved.type, steps = saved.steps,
                     )
                 }
                 showBuilder = false
@@ -131,6 +169,14 @@ private fun MainScreen(engine: Engine) {
         topBar = {
             TopAppBar(
                 title = { Text("ZUtils AI Engine") },
+                actions = {
+                    TextButton(onClick = {
+                        keyInput = savedKey
+                        showKeyDialog = true
+                    }) {
+                        Text(if (savedKey.isNotBlank()) "🔗" else "⚙️")
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                 )
@@ -160,7 +206,7 @@ private fun MainScreen(engine: Engine) {
         }
     ) { padding ->
         when (tab) {
-            Tab.EXECUTE -> ExecuteScreen(engine, history, Modifier.padding(padding))
+            Tab.EXECUTE -> ExecuteScreen(engine, history, llmClient, Modifier.padding(padding))
             Tab.WORKFLOWS -> WorkflowsScreen(
                 functions = engine.registry.getAllInfos(),
                 storage = storage,
@@ -193,6 +239,7 @@ private enum class Tab { EXECUTE, WORKFLOWS, FUNCTIONS }
 private fun ExecuteScreen(
     engine: Engine,
     history: MutableList<HistoryEntry>,
+    llmClient: LlmClient?,
     modifier: Modifier,
 ) {
     var input by remember { mutableStateOf("") }
@@ -348,7 +395,7 @@ private fun ExecuteScreen(
                         input = ""
                         isLoading = true
                         scope.launch {
-                            val result = runQuery(engine, query)
+                            val result = runQuery(engine, query, llmClient)
                             history.add(0, HistoryEntry(query, EntryType.TEXT, result = result))
                             isLoading = false
                         }
@@ -374,8 +421,30 @@ private suspend fun runQueryRaw(engine: Engine, workflow: Workflow): ResultConte
     return formatResult(result)
 }
 
-private suspend fun runQuery(engine: Engine, query: String): ResultContent {
-    val workflow = parseQuery(query)
+private suspend fun runQuery(engine: Engine, query: String, llmClient: LlmClient?): ResultContent {
+    Log.i("ZUtils-LLM", "=== 执行开始 ===")
+    Log.i("ZUtils-LLM", "输入: \"$query\"")
+    Log.i("ZUtils-LLM", "LLM 客户端: ${if (llmClient != null) "已配置 (${llmClient::class.simpleName})" else "未配置，使用关键词匹配"}")
+
+    val workflow = if (llmClient != null) {
+        try {
+            Log.i("ZUtils-LLM", "→ 发送请求到 LLM...")
+            val wf = llmClient.parseIntent(query, engine.registry.getAllInfos())
+            Log.i("ZUtils-LLM", "← LLM 返回: ${wf.steps.size} 个步骤")
+            for (step in wf.steps) {
+                Log.i("ZUtils-LLM", "   - ${step.function} args=${step.args}")
+            }
+            wf
+        } catch (e: Exception) {
+            Log.w("ZUtils-LLM", "⚠️ LLM 调用失败: ${e::class.simpleName}: ${e.message}")
+            Log.i("ZUtils-LLM", "→ 回退到关键词匹配")
+            parseQuery(query)
+        }
+    } else {
+        parseQuery(query)
+    }
+
+    Log.i("ZUtils-LLM", "=== 执行结束 ===")
     return runQueryRaw(engine, workflow)
 }
 
