@@ -3,6 +3,7 @@ package com.zhoulesin.zutils.engine.core
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.provider.Settings
 import androidx.core.content.ContextCompat
 
 class PermissionChecker(private val context: Context) {
@@ -31,10 +32,16 @@ class PermissionChecker(private val context: Context) {
         for (perm in permissions) {
             if (perm.isBlank()) continue
             if (perm !in declaredPermissions) return PermissionCheck.NotDeclared(perm)
-            if (ContextCompat.checkSelfPermission(context, perm) != PackageManager.PERMISSION_GRANTED) {
-                return PermissionCheck.NotGranted(perm)
-            }
+            if (!isGranted(perm)) return PermissionCheck.NotGranted(perm)
         }
         return PermissionCheck.OK
+    }
+
+    private fun isGranted(permission: String): Boolean {
+        // Special permissions need their own checks
+        if (permission == android.Manifest.permission.WRITE_SETTINGS) {
+            return Settings.System.canWrite(context)
+        }
+        return ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
     }
 }

@@ -20,7 +20,7 @@ class SetScreenBrightnessFunction : ZFunction {
                 required = true,
             )
         ),
-        permissions = listOf(Settings.ACTION_MANAGE_WRITE_SETTINGS),
+        permissions = listOf(android.Manifest.permission.WRITE_SETTINGS),
     )
 
     override suspend fun execute(context: ExecutionContext, args: JsonObject): ZResult {

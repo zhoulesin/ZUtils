@@ -1,7 +1,10 @@
 package com.zhoulesin.zutils
 
 import android.graphics.BitmapFactory
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import android.util.Base64
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -21,11 +24,13 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import com.zhoulesin.zutils.engine.Engine
 import com.zhoulesin.zutils.engine.core.*
-import com.zhoulesin.zutils.plugin.DefaultDexLoader
 import com.zhoulesin.zutils.engine.functions.*
 import com.zhoulesin.zutils.engine.workflow.Workflow
 import com.zhoulesin.zutils.engine.workflow.WorkflowResult
 import com.zhoulesin.zutils.engine.workflow.WorkflowStep
+import com.zhoulesin.zutils.plugin.DefaultDexLoader
+import com.zhoulesin.zutils.ui.screen.FunctionsScreen
+import com.zhoulesin.zutils.ui.screen.WorkflowsScreen
 import com.zhoulesin.zutils.ui.theme.ZUtilsTheme
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
@@ -35,6 +40,10 @@ import kotlinx.serialization.json.JsonPrimitive
 sealed class ResultContent {
     data class Text(val content: String) : ResultContent()
     data class QrImage(val dataUri: String, val text: String) : ResultContent()
+    data class PermissionRequest(
+        val permission: String,
+        val message: String,
+    ) : ResultContent()
 }
 
 class MainActivity : ComponentActivity() {
@@ -76,10 +85,9 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MainScreen(engine: Engine) {
-    var input by remember { mutableStateOf("") }
+    var tab by remember { mutableStateOf(Tab.EXECUTE) }
     val history = remember { mutableStateListOf<Pair<String, ResultContent>>() }
     val scope = rememberCoroutineScope()
-    var isLoading by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -89,121 +97,207 @@ private fun MainScreen(engine: Engine) {
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                 )
             )
+        },
+        bottomBar = {
+            NavigationBar {
+                NavigationBarItem(
+                    selected = tab == Tab.EXECUTE,
+                    onClick = { tab = Tab.EXECUTE },
+                    icon = { Text("▶") },
+                    label = { Text("执行") },
+                )
+                NavigationBarItem(
+                    selected = tab == Tab.WORKFLOWS,
+                    onClick = { tab = Tab.WORKFLOWS },
+                    icon = { Text("⚡") },
+                    label = { Text("工作流") },
+                )
+                NavigationBarItem(
+                    selected = tab == Tab.FUNCTIONS,
+                    onClick = { tab = Tab.FUNCTIONS },
+                    icon = { Text("☰") },
+                    label = { Text("函数") },
+                )
+            }
         }
     ) { padding ->
-        Column(
+        when (tab) {
+            Tab.EXECUTE -> ExecuteScreen(engine, history, Modifier.padding(padding))
+            Tab.WORKFLOWS -> WorkflowsScreen(
+                onExecute = { workflow ->
+                    scope.launch {
+                        val label = workflow.summary ?: workflow.steps.joinToString(" + ") { it.function }
+                        val result = runQueryRaw(engine, workflow)
+                        history.add(0, label to result)
+                        tab = Tab.EXECUTE
+                    }
+                },
+                modifier = Modifier.padding(padding),
+            )
+            Tab.FUNCTIONS -> FunctionsScreen(engine.registry.getAllInfos(), Modifier.padding(padding))
+        }
+    }
+}
+
+private enum class Tab { EXECUTE, WORKFLOWS, FUNCTIONS }
+
+@Composable
+private fun ExecuteScreen(
+    engine: Engine,
+    history: MutableList<Pair<String, ResultContent>>,
+    modifier: Modifier,
+) {
+    var input by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    var isLoading by remember { mutableStateOf(false) }
+    var pendingPermission by remember { mutableStateOf<String?>(null) }
+
+    if (pendingPermission != null) {
+        AlertDialog(
+            onDismissRequest = { pendingPermission = null },
+            title = { Text("需要授权") },
+            text = { Text("执行该功能需要「修改系统设置」权限。是否前往系统设置页面开启？") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val intent = Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS).apply {
+                        data = Uri.parse("package:${engine.androidContext.packageName}")
+                    }
+                    engine.androidContext.startActivity(intent)
+                    pendingPermission = null
+                }) { Text("去授权") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingPermission = null }) { Text("取消") }
+            },
+        )
+    }
+
+    Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
+        LazyColumn(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
+                .weight(1f)
+                .fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            LazyColumn(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items(history.toList()) { (query, content) ->
-                    val isError = content is ResultContent.Text && content.content.startsWith("Error")
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (isError) {
-                                MaterialTheme.colorScheme.errorContainer
-                            } else {
-                                MaterialTheme.colorScheme.surfaceVariant
-                            },
+            items(history.toList()) { (query, content) ->
+                val isError = content is ResultContent.Text && content.content.startsWith("Error")
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isError) {
+                            MaterialTheme.colorScheme.errorContainer
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        },
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = "> $query",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
                         )
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text(
-                                text = "> $query",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary,
+                        Spacer(Modifier.height(4.dp))
+                        when (content) {
+                            is ResultContent.Text -> Text(
+                                text = content.content,
+                                style = MaterialTheme.typography.bodyMedium,
                             )
-                            Spacer(Modifier.height(4.dp))
-                            when (content) {
-                                is ResultContent.Text -> Text(
-                                    text = content.content,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                )
-                                is ResultContent.QrImage -> {
-                                    val bitmap = remember(content.dataUri) {
-                                        val base64 = content.dataUri.removePrefix("data:image/png;base64,")
-                                        val bytes = Base64.decode(base64, Base64.DEFAULT)
-                                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                                    }
-                                    if (bitmap != null) {
-                                        Image(
-                                            bitmap = bitmap.asImageBitmap(),
-                                            contentDescription = "QR Code",
-                                            modifier = Modifier
-                                                .size(200.dp)
-                                                .clip(RoundedCornerShape(8.dp)),
-                                            contentScale = ContentScale.Fit,
-                                        )
-                                    }
-                                    Spacer(Modifier.height(4.dp))
-                                    Text(
-                                        text = content.text,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            is ResultContent.QrImage -> {
+                                val bitmap = remember(content.dataUri) {
+                                    val base64 = content.dataUri.removePrefix("data:image/png;base64,")
+                                    val bytes = Base64.decode(base64, Base64.DEFAULT)
+                                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                                }
+                                if (bitmap != null) {
+                                    Image(
+                                        bitmap = bitmap.asImageBitmap(),
+                                        contentDescription = "QR Code",
+                                        modifier = Modifier
+                                            .size(200.dp)
+                                            .clip(RoundedCornerShape(8.dp)),
+                                        contentScale = ContentScale.Fit,
                                     )
+                                }
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = content.text,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            is ResultContent.PermissionRequest -> {
+                                Text(
+                                    text = content.message,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                Button(
+                                    onClick = { pendingPermission = content.permission },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.error,
+                                    ),
+                                ) {
+                                    Text("去授权")
                                 }
                             }
                         }
                     }
                 }
             }
+        }
 
-            Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(12.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                OutlinedTextField(
-                    value = input,
-                    onValueChange = { input = it },
-                    modifier = Modifier.weight(1f),
-                    placeholder = { Text("输入需求，如：计算 2+2 / 时间 / 电量 / UUID / base64 编码hello / 音量50 / 剪贴板 / 屏幕 / 存储 / 网络") },
-                    enabled = !isLoading,
-                    singleLine = true,
-                )
-                Button(
-                    onClick = {
-                        val query = input.trim()
-                        if (query.isNotEmpty()) {
-                            input = ""
-                            isLoading = true
-                            scope.launch {
-                                val result = runQuery(engine, query)
-                                history.add(0, query to result)
-                                isLoading = false
-                            }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            OutlinedTextField(
+                value = input,
+                onValueChange = { input = it },
+                modifier = Modifier.weight(1f),
+                placeholder = { Text("输入需求，如：计算 2+2 / 时间 / 电量 / UUID / base64 编码hello / 音量50 / 剪贴板 / 屏幕 / 存储 / 网络") },
+                enabled = !isLoading,
+                singleLine = true,
+            )
+            Button(
+                onClick = {
+                    val query = input.trim()
+                    if (query.isNotEmpty()) {
+                        input = ""
+                        isLoading = true
+                        scope.launch {
+                            val result = runQuery(engine, query)
+                            history.add(0, query to result)
+                            isLoading = false
                         }
-                    },
-                    enabled = !isLoading && input.isNotBlank(),
-                ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.dp,
-                        )
-                    } else {
-                        Text("执行")
                     }
+                },
+                enabled = !isLoading && input.isNotBlank(),
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    Text("执行")
                 }
             }
         }
     }
 }
 
-private suspend fun runQuery(engine: Engine, query: String): ResultContent {
-    val workflow = parseQuery(query)
+private suspend fun runQueryRaw(engine: Engine, workflow: Workflow): ResultContent {
     val result = engine.execute(workflow)
     return formatResult(result)
+}
+
+private suspend fun runQuery(engine: Engine, query: String): ResultContent {
+    val workflow = parseQuery(query)
+    return runQueryRaw(engine, workflow)
 }
 
 private fun parseQuery(query: String): Workflow {
@@ -322,6 +416,7 @@ private suspend fun formatResult(result: WorkflowResult): ResultContent {
     val sb = StringBuilder()
     var dataUri: String? = null
     var hasImage = false
+    var permissionError: String? = null
 
     result.dexLoadLog?.forEach { line ->
         sb.appendLine("  $line")
@@ -340,7 +435,12 @@ private suspend fun formatResult(result: WorkflowResult): ResultContent {
                 }
                 sb.appendLine("  ✅ ${r.data}")
             }
-            is ZResult.Error -> sb.appendLine("  ❌ ${r.message}")
+            is ZResult.Error -> {
+                if (r.code == "MISSING_PERMISSION") {
+                    permissionError = r.message
+                }
+                sb.appendLine("  ❌ ${r.message}")
+            }
         }
         if (step.durationMs > 0) {
             sb.appendLine("  (${step.durationMs}ms)")
@@ -348,6 +448,13 @@ private suspend fun formatResult(result: WorkflowResult): ResultContent {
     }
     sb.appendLine("总计: ${result.totalDurationMs}ms")
     val text = sb.toString().trimEnd()
+
+    if (permissionError != null) {
+        return ResultContent.PermissionRequest(
+            permission = "android.permission.WRITE_SETTINGS",
+            message = text,
+        )
+    }
 
     return if (hasImage && dataUri != null) {
         ResultContent.QrImage(dataUri = dataUri, text = text)
