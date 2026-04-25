@@ -38,8 +38,10 @@ fun WorkflowBuilderScreen(
     var titleError by remember { mutableStateOf(false) }
 
     val availableFunctions = remember(selectedSteps.toList(), isPipeline) {
-        if (!isPipeline || selectedSteps.isEmpty()) {
+        if (selectedSteps.isEmpty()) {
             functions
+        } else if (!isPipeline) {
+            functions.filter { it.parameters.none { p -> p.required } }
         } else {
             val prev = selectedSteps.last().outputType
             functions.filter { isCompatible(prev, it) }
@@ -151,7 +153,9 @@ fun WorkflowBuilderScreen(
             item {
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    if (isPipeline && selectedSteps.isNotEmpty()) "可用的下一步函数:" else "可用函数:",
+                    text = if (selectedSteps.isEmpty()) "选择第一个函数:"
+                        else if (isPipeline) "可用的下一步函数（根据输出类型匹配）:"
+                        else "可用函数（仅显示无必填参数的）:",
                     style = MaterialTheme.typography.labelSmall,
                 )
             }
@@ -207,6 +211,8 @@ fun WorkflowBuilderScreen(
 }
 
 private fun isCompatible(prevOutput: OutputType, next: FunctionInfo): Boolean {
+    val hasRequired = next.parameters.any { it.required }
+    if (!hasRequired && next.parameters.any { it.type == ParameterType.STRING }) return true
     return when (prevOutput) {
         OutputType.TEXT -> next.parameters.any { it.type == ParameterType.STRING }
         OutputType.NUMBER -> next.parameters.any { it.type == ParameterType.INTEGER || it.type == ParameterType.NUMBER }
@@ -231,34 +237,11 @@ private fun buildWorkflow(
             } else {
                 emptyMap()
             }
-            val fixedArgs = fn.parameters.filter { it.name !in pipeline && it.required }
-                .mapNotNull { param ->
-                    when (param.type) {
-                        ParameterType.INTEGER, ParameterType.NUMBER -> param.name to "50"
-                        ParameterType.STRING -> param.name to "auto"
-                        else -> null
-                    }
-                }
-            WorkflowStep(
-                id = i,
-                function = fn.name,
-                args = JsonObject(fixedArgs.associate { (k, v) -> k to JsonPrimitive(v) }),
-                pipeline = pipeline,
-            )
+            WorkflowStep(id = i, function = fn.name, pipeline = pipeline)
+        } else if (i == 0) {
+            WorkflowStep(id = i, function = fn.name)
         } else {
-            val defaultArgs = fn.parameters.filter { it.required }
-                .mapNotNull { param ->
-                    when (param.type) {
-                        ParameterType.STRING -> param.name to if (param.name == "expression") "1+1" else if (param.name == "text") "hello" else if (param.name == "message") "done" else "auto"
-                        ParameterType.INTEGER, ParameterType.NUMBER -> param.name to "50"
-                        else -> null
-                    }
-                }
-            WorkflowStep(
-                id = i,
-                function = fn.name,
-                args = JsonObject(defaultArgs.associate { (k, v) -> k to JsonPrimitive(v) }),
-            )
+            WorkflowStep(id = i, function = fn.name)
         }
     }
     return Workflow(steps = workflowSteps, summary = title)

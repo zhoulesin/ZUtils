@@ -27,6 +27,9 @@ import com.zhoulesin.zutils.data.WorkflowStorage
 import com.zhoulesin.zutils.engine.Engine
 import com.zhoulesin.zutils.engine.core.*
 import com.zhoulesin.zutils.engine.functions.*
+import com.zhoulesin.zutils.functions.calculate.CalculateFunction
+import com.zhoulesin.zutils.functions.time.GetCurrentTimeFunction
+import com.zhoulesin.zutils.functions.uuid.UuidFunction
 import com.zhoulesin.zutils.engine.workflow.Workflow
 import com.zhoulesin.zutils.engine.workflow.WorkflowResult
 import com.zhoulesin.zutils.engine.workflow.WorkflowStep
@@ -48,6 +51,15 @@ sealed class ResultContent {
         val message: String,
     ) : ResultContent()
 }
+
+enum class EntryType { TEXT, WORKFLOW }
+
+data class HistoryEntry(
+    val label: String,
+    val type: EntryType,
+    val params: Map<String, String> = emptyMap(),
+    val result: ResultContent,
+)
 
 class MainActivity : ComponentActivity() {
     private lateinit var engine: Engine
@@ -89,7 +101,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun MainScreen(engine: Engine) {
     var tab by remember { mutableStateOf(Tab.EXECUTE) }
-    val history = remember { mutableStateListOf<Pair<String, ResultContent>>() }
+    val history = remember { mutableStateListOf<HistoryEntry>() }
     val scope = rememberCoroutineScope()
     var showBuilder by remember { mutableStateOf(false) }
     val storage = remember { WorkflowStorage(engine.androidContext) }
@@ -154,8 +166,15 @@ private fun MainScreen(engine: Engine) {
                 onExecute = { workflow ->
                     scope.launch {
                         val label = workflow.summary ?: workflow.steps.joinToString(" + ") { it.function }
+                        val params = workflow.steps.firstOrNull()?.args?.let { args ->
+                            val m = mutableMapOf<String, String>()
+                            for ((k, v) in args) {
+                                if (v is JsonPrimitive) m[k] = v.content
+                            }
+                            m
+                        } ?: emptyMap()
                         val result = runQueryRaw(engine, workflow)
-                        history.add(0, label to result)
+                        history.add(0, HistoryEntry(label, EntryType.WORKFLOW, params, result))
                         tab = Tab.EXECUTE
                     }
                 },
@@ -172,7 +191,7 @@ private enum class Tab { EXECUTE, WORKFLOWS, FUNCTIONS }
 @Composable
 private fun ExecuteScreen(
     engine: Engine,
-    history: MutableList<Pair<String, ResultContent>>,
+    history: MutableList<HistoryEntry>,
     modifier: Modifier,
 ) {
     var input by remember { mutableStateOf("") }
@@ -207,8 +226,8 @@ private fun ExecuteScreen(
                 .fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(history.toList()) { (query, content) ->
-                val isError = content is ResultContent.Text && content.content.startsWith("Error")
+            items(history.toList()) { entry ->
+                val isError = entry.result is ResultContent.Text && entry.result.content.startsWith("Error")
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
@@ -220,20 +239,28 @@ private fun ExecuteScreen(
                     )
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
-                        Text(
-                            text = "> $query",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = if (entry.type == EntryType.TEXT) "> ${entry.label}" else entry.label,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.weight(1f),
+                            )
+                            EntryTypeBadge(entry.type)
+                        }
                         Spacer(Modifier.height(4.dp))
-                        when (content) {
+                        when (entry.result) {
                             is ResultContent.Text -> Text(
-                                text = content.content,
+                                text = entry.result.content,
                                 style = MaterialTheme.typography.bodyMedium,
                             )
                             is ResultContent.QrImage -> {
-                                val bitmap = remember(content.dataUri) {
-                                    val base64 = content.dataUri.removePrefix("data:image/png;base64,")
+                                val bitmap = remember(entry.result.dataUri) {
+                                    val base64 = entry.result.dataUri.removePrefix("data:image/png;base64,")
                                     val bytes = Base64.decode(base64, Base64.DEFAULT)
                                     BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                                 }
@@ -249,19 +276,19 @@ private fun ExecuteScreen(
                                 }
                                 Spacer(Modifier.height(4.dp))
                                 Text(
-                                    text = content.text,
+                                    text = entry.result.text,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                             is ResultContent.PermissionRequest -> {
                                 Text(
-                                    text = content.message,
+                                    text = entry.result.message,
                                     style = MaterialTheme.typography.bodySmall,
                                 )
                                 Spacer(Modifier.height(8.dp))
                                 Button(
-                                    onClick = { pendingPermission = content.permission },
+                                    onClick = { pendingPermission = entry.result.permission },
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = MaterialTheme.colorScheme.error,
                                     ),
@@ -269,6 +296,14 @@ private fun ExecuteScreen(
                                     Text("去授权")
                                 }
                             }
+                        }
+                        if (entry.type == EntryType.WORKFLOW && entry.params.isNotEmpty()) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = "入参: " + entry.params.entries.joinToString(", ") { "${it.key}=${it.value}" },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                     }
                 }
@@ -298,7 +333,7 @@ private fun ExecuteScreen(
                         isLoading = true
                         scope.launch {
                             val result = runQuery(engine, query)
-                            history.add(0, query to result)
+                            history.add(0, HistoryEntry(query, EntryType.TEXT, result = result))
                             isLoading = false
                         }
                     }
@@ -332,8 +367,9 @@ private fun parseQuery(query: String): Workflow {
     val q = query.lowercase().trim()
 
     val steps = when {
-        q.startsWith("计算") || q.startsWith("calc") -> {
-            val expr = q.removePrefix("计算").removePrefix("calc").trim()
+        q.startsWith("计算") || q.startsWith("calc") || q.matches(Regex("^[\\d+\\-*/().\\s]+$")) -> {
+            val expr = if (q.matches(Regex("^[\\d+\\-*/().\\s]+$"))) q
+            else q.replace(Regex("^计算|^calc[a-z]*\\s*", RegexOption.IGNORE_CASE), "").trim()
                 .ifEmpty { "0" }
             listOf(step("calculate", "expression" to expr))
         }
@@ -488,5 +524,24 @@ private suspend fun formatResult(result: WorkflowResult): ResultContent {
         ResultContent.QrImage(dataUri = dataUri, text = text)
     } else {
         ResultContent.Text(text)
+    }
+}
+
+@Composable
+private fun EntryTypeBadge(type: EntryType) {
+    val (text, color) = when (type) {
+        EntryType.TEXT -> "文本" to MaterialTheme.colorScheme.tertiary
+        EntryType.WORKFLOW -> "工作流" to MaterialTheme.colorScheme.secondary
+    }
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = color.copy(alpha = 0.2f),
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+            style = MaterialTheme.typography.labelSmall,
+            color = color,
+        )
     }
 }

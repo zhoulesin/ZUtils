@@ -1,4 +1,4 @@
-package com.zhoulesin.zutils.engine.functions
+package com.zhoulesin.zutils.functions.calculate
 
 import com.zhoulesin.zutils.engine.core.*
 import kotlinx.serialization.json.JsonObject
@@ -33,7 +33,15 @@ class CalculateFunction : ZFunction {
     }
 
     private fun evaluate(expr: String): Number {
-        val sanitized = expr.replace(" ", "")
+        val sanitized = expr
+            .replace(" ", "")
+            .replace('＋', '+')
+            .replace('－', '-')
+            .replace('×', '*')
+            .replace('÷', '/')
+            .replace('（', '(')
+            .replace('）', ')')
+            .replace('．', '.')
         if (!sanitized.matches(Regex("^[0-9+\\-*/().]+$"))) {
             throw IllegalArgumentException("Invalid characters in expression")
         }

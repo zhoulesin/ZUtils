@@ -26,4 +26,6 @@ rootProject.name = "ZUtils"
 include(":app")
 include(":engine-core")
 include(":plugin-manager")
-include(":qrcode-function")
+include(":functions:calculate")
+include(":functions:uuid")
+include(":functions:time")
