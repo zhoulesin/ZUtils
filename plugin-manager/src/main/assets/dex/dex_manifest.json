@@ -1,0 +1,17 @@
+{
+  "plugins": [
+    {
+      "functionName": "generateQRCode",
+      "version": "1.0.0",
+      "dexUrl": "dex/plugin_qrcode_v1.0.0.dex",
+      "className": "com.zhoulesin.zutils.testfun.QRCodeFunction",
+      "dependencies": [
+        {
+          "name": "zxing-core",
+          "version": "3.5.3",
+          "dexUrl": "dex/lib_zxing_v3.5.3.dex"
+        }
+      ]
+    }
+  ]
+}
