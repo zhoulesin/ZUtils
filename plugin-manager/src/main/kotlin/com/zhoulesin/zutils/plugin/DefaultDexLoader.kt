@@ -48,11 +48,7 @@ class DefaultDexLoader(
                 className = p.className,
                 version = p.version,
                 dependencies = p.dependencies.map { d ->
-                    DependencySpec(
-                        name = d.name,
-                        dexUrl = d.dexUrl,
-                        version = d.version,
-                    )
+                    DependencySpec(name = d.name, dexUrl = d.dexUrl, version = d.version)
                 },
             )
         }

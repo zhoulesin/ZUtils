@@ -1,6 +1,7 @@
 package com.zhoulesin.zutils.engine
 
 import android.content.Context
+import android.util.Log
 import com.zhoulesin.zutils.engine.core.ExecutionContext
 import com.zhoulesin.zutils.engine.core.FunctionRegistry
 import com.zhoulesin.zutils.engine.dex.DexLoader
@@ -59,14 +60,29 @@ class Engine(
             val bytes = try {
                 loader.download(spec)
             } catch (e: Exception) {
+                Log.e("ZUtils-DEX", "download failed for ${spec.dexUrl}", e)
                 log.add("❌ Download failed: ${e.message}")
                 continue
             }
-            log.add("📦 DEX size: ${bytes.size / 1024}KB")
+            log.add("📦 DEX size: ${bytes.size / 1024}KB, class: ${spec.className}")
             val functions = try {
                 loader.load(bytes, spec)
             } catch (e: Exception) {
-                log.add("❌ Load failed: ${e.message}")
+                Log.e("ZUtils-DEX", "load failed for ${spec.className}", e)
+                log.add("❌ Load failed: ${e::class.simpleName}: ${e.message}")
+                var cause = e.cause
+                var depth = 0
+                while (cause != null && depth < 3) {
+                    log.add("   Caused by: ${cause::class.simpleName}: ${cause.message}")
+                    for (ste in cause.stackTrace.take(3)) {
+                        log.add("      at ${ste.className}.${ste.methodName}(${ste.fileName}:${ste.lineNumber})")
+                    }
+                    cause = cause.cause
+                    depth++
+                }
+                for ((i, d) in spec.dependencies.withIndex()) {
+                    log.add("   dep[$i]: ${d.name} v${d.version} → ${d.dexUrl}")
+                }
                 continue
             }
             functions.forEach { registered ->

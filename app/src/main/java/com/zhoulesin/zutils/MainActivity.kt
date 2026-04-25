@@ -10,6 +10,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -227,9 +228,16 @@ private fun ExecuteScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(history.toList()) { entry ->
+                var expanded by remember { mutableStateOf(false) }
                 val isError = entry.result is ResultContent.Text && entry.result.content.startsWith("Error")
+                val lines = if (entry.result is ResultContent.Text) entry.result.content.lines() else emptyList()
+                val summaryLine = lines.filter { it.contains("✅") }.lastOrNull()
+                    ?: lines.firstOrNull { !it.startsWith("步骤") && !it.startsWith("总计") && !it.startsWith("  (") && it.isNotBlank() }
+                    ?: ""
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { expanded = !expanded },
                     colors = CardDefaults.cardColors(
                         containerColor = if (isError) {
                             MaterialTheme.colorScheme.errorContainer
@@ -253,57 +261,65 @@ private fun ExecuteScreen(
                             EntryTypeBadge(entry.type)
                         }
                         Spacer(Modifier.height(4.dp))
-                        when (entry.result) {
-                            is ResultContent.Text -> Text(
-                                text = entry.result.content,
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                            is ResultContent.QrImage -> {
-                                val bitmap = remember(entry.result.dataUri) {
-                                    val base64 = entry.result.dataUri.removePrefix("data:image/png;base64,")
-                                    val bytes = Base64.decode(base64, Base64.DEFAULT)
-                                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                                }
-                                if (bitmap != null) {
-                                    Image(
-                                        bitmap = bitmap.asImageBitmap(),
-                                        contentDescription = "QR Code",
-                                        modifier = Modifier
-                                            .size(200.dp)
-                                            .clip(RoundedCornerShape(8.dp)),
-                                        contentScale = ContentScale.Fit,
-                                    )
-                                }
-                                Spacer(Modifier.height(4.dp))
-                                Text(
-                                    text = entry.result.text,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            is ResultContent.PermissionRequest -> {
-                                Text(
-                                    text = entry.result.message,
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                                Spacer(Modifier.height(8.dp))
-                                Button(
-                                    onClick = { pendingPermission = entry.result.permission },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.error,
-                                    ),
-                                ) {
-                                    Text("去授权")
-                                }
-                            }
-                        }
-                        if (entry.type == EntryType.WORKFLOW && entry.params.isNotEmpty()) {
-                            Spacer(Modifier.height(4.dp))
+                        if (!expanded && entry.result is ResultContent.Text) {
                             Text(
-                                text = "入参: " + entry.params.entries.joinToString(", ") { "${it.key}=${it.value}" },
+                                text = summaryLine,
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 1,
+                            )
+                            Text(
+                                text = "展开详情 ▼",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                        }
+                        if (expanded) {
+                            when (entry.result) {
+                                is ResultContent.Text -> Text(
+                                    text = entry.result.content,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                                is ResultContent.QrImage -> {
+                                    val bitmap = remember(entry.result.dataUri) {
+                                        val base64 = entry.result.dataUri.removePrefix("data:image/png;base64,")
+                                        val bytes = Base64.decode(base64, Base64.DEFAULT)
+                                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                                    }
+                                    if (bitmap != null) {
+                                        Image(
+                                            bitmap = bitmap.asImageBitmap(),
+                                            contentDescription = "QR Code",
+                                            modifier = Modifier
+                                                .size(200.dp)
+                                                .clip(RoundedCornerShape(8.dp)),
+                                            contentScale = ContentScale.Fit,
+                                        )
+                                    }
+                                    Text(
+                                        text = entry.result.text,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                is ResultContent.PermissionRequest -> {
+                                    Text(
+                                        text = entry.result.message,
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                    Spacer(Modifier.height(8.dp))
+                                    Button(
+                                        onClick = { pendingPermission = entry.result.permission },
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                    ) { Text("去授权") }
+                                }
+                            }
+                            if (entry.type == EntryType.WORKFLOW && entry.params.isNotEmpty()) {
+                                Text(
+                                    text = "入参: " + entry.params.entries.joinToString(", ") { "${it.key}=${it.value}" },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
                 }
