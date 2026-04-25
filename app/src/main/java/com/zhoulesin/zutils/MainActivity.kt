@@ -22,6 +22,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import com.zhoulesin.zutils.data.SavedWorkflow
+import com.zhoulesin.zutils.data.WorkflowStorage
 import com.zhoulesin.zutils.engine.Engine
 import com.zhoulesin.zutils.engine.core.*
 import com.zhoulesin.zutils.engine.functions.*
@@ -90,20 +92,24 @@ private fun MainScreen(engine: Engine) {
     val history = remember { mutableStateListOf<Pair<String, ResultContent>>() }
     val scope = rememberCoroutineScope()
     var showBuilder by remember { mutableStateOf(false) }
+    val storage = remember { WorkflowStorage(engine.androidContext) }
 
     if (showBuilder) {
         WorkflowBuilderScreen(
             functions = engine.registry.getAllInfos(),
-            onBack = { showBuilder = false },
-            onExecute = { workflow ->
-                showBuilder = false
+            onSave = { saved ->
                 scope.launch {
-                    val label = workflow.summary ?: workflow.steps.joinToString(" + ") { it.function }
-                    val result = runQueryRaw(engine, workflow)
-                    history.add(0, label to result)
-                    tab = Tab.EXECUTE
+                    storage.saveFromSteps(
+                        id = saved.id,
+                        title = saved.title,
+                        desc = saved.description,
+                        type = saved.type,
+                        steps = saved.steps,
+                    )
                 }
+                showBuilder = false
             },
+            onBack = { showBuilder = false },
         )
         return
     }
@@ -144,6 +150,7 @@ private fun MainScreen(engine: Engine) {
             Tab.EXECUTE -> ExecuteScreen(engine, history, Modifier.padding(padding))
             Tab.WORKFLOWS -> WorkflowsScreen(
                 functions = engine.registry.getAllInfos(),
+                storage = storage,
                 onExecute = { workflow ->
                     scope.launch {
                         val label = workflow.summary ?: workflow.steps.joinToString(" + ") { it.function }

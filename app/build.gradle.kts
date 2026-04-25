@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.google.ksp)
     alias(libs.plugins.kotlin.serialization)
 }
 
@@ -52,6 +53,9 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(project(":engine-core"))
     implementation(project(":plugin-manager"))
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    ksp(libs.room.compiler)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

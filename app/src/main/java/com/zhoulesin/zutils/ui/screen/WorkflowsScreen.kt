@@ -6,11 +6,17 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.zhoulesin.zutils.data.SavedStep
+import com.zhoulesin.zutils.data.WorkflowEntity
+import com.zhoulesin.zutils.data.WorkflowStorage
 import com.zhoulesin.zutils.engine.core.FunctionInfo
 import com.zhoulesin.zutils.engine.workflow.Workflow
 import com.zhoulesin.zutils.engine.workflow.WorkflowStep
+import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -30,11 +36,7 @@ private fun step(name: String, vararg args: Pair<String, String>): WorkflowStep 
     return WorkflowStep(function = name, args = jsonArgs)
 }
 
-private fun pipelineStep(
-    name: String,
-    pipeline: Map<String, String>,
-    vararg args: Pair<String, String> = emptyArray(),
-): WorkflowStep {
+private fun pipelineStep(name: String, pipeline: Map<String, String>, vararg args: Pair<String, String> = emptyArray()): WorkflowStep {
     val jsonArgs = if (args.isEmpty()) JsonObject(emptyMap())
     else JsonObject(args.associate { (k, v) -> k to JsonPrimitive(v) })
     return WorkflowStep(function = name, args = jsonArgs, pipeline = pipeline)
@@ -56,11 +58,6 @@ private val sequentialWorkflows = listOf(
             step("uuid"), step("getCurrentTime"), step("base64", "action" to "encode", "text" to "Hello ZUtils"),
         ), summary = "开发工具") },
     ),
-    WorkflowTemplate("剪贴板操作", "写入 → 读取验证", "📋", WorkflowType.SEQUENTIAL,
-        build = { Workflow(listOf(
-            step("setClipboard", "text" to "ZUtils clipboard test"), step("getClipboard"),
-        ), summary = "剪贴板测试") },
-    ),
     WorkflowTemplate("设备全景", "时间 + 设备 + 电量 + 存储 + 网络 + 屏幕", "📊", WorkflowType.SEQUENTIAL,
         build = { Workflow(listOf(
             step("getCurrentTime"), step("getDeviceInfo"), step("getBatteryLevel"),
@@ -78,127 +75,147 @@ private val sequentialWorkflows = listOf(
 private val pipelineWorkflows = listOf(
     WorkflowTemplate("时间通知", "获取当前时间 → 显示为 Toast", "⏰", WorkflowType.PIPELINE,
         build = { Workflow(listOf(
-            step("getCurrentTime"),
-            pipelineStep("toast", pipeline = mapOf("message" to "{0}")),
+            step("getCurrentTime"), pipelineStep("toast", pipeline = mapOf("message" to "{0}")),
         ), summary = "时间通知") },
     ),
     WorkflowTemplate("电量通知", "获取电量 → 显示为 Toast", "🔋", WorkflowType.PIPELINE,
         build = { Workflow(listOf(
-            step("getBatteryLevel"),
-            pipelineStep("toast", pipeline = mapOf("message" to "{0}")),
+            step("getBatteryLevel"), pipelineStep("toast", pipeline = mapOf("message" to "{0}")),
         ), summary = "电量通知") },
     ),
     WorkflowTemplate("设备名提示", "获取设备名称 → 显示为 Toast", "📱", WorkflowType.PIPELINE,
         build = { Workflow(listOf(
-            step("getDeviceInfo"),
-            pipelineStep("toast", pipeline = mapOf("message" to "{0.model}")),
+            step("getDeviceInfo"), pipelineStep("toast", pipeline = mapOf("message" to "{0.model}")),
         ), summary = "设备名提示") },
     ),
     WorkflowTemplate("时间到剪贴板", "获取时间 → 复制到剪贴板", "📋", WorkflowType.PIPELINE,
         build = { Workflow(listOf(
-            step("getCurrentTime"),
-            pipelineStep("setClipboard", pipeline = mapOf("text" to "{0}")),
+            step("getCurrentTime"), pipelineStep("setClipboard", pipeline = mapOf("text" to "{0}")),
         ), summary = "时间到剪贴板") },
     ),
-)
-
-private val sectionHeaders = listOf(
-    "顺序工作流" to sequentialWorkflows,
-    "管道工作流" to pipelineWorkflows,
 )
 
 @Composable
 fun WorkflowsScreen(
     functions: List<FunctionInfo>,
+    storage: WorkflowStorage,
     onExecute: (Workflow) -> Unit,
     onNewWorkflow: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    WorkflowsList(onExecute = onExecute, showBuilder = onNewWorkflow, modifier = modifier)
-}
+    val scope = rememberCoroutineScope()
+    val savedWorkflows by storage.loadAll().collectAsState(initial = emptyList())
+    var pendingExecution by remember { mutableStateOf<WorkflowEntity?>(null) }
 
-@Composable
-private fun WorkflowsList(
-    onExecute: (Workflow) -> Unit,
-    showBuilder: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
+    if (pendingExecution != null) {
+        val entity = pendingExecution!!
+        val steps = Json.decodeFromString<List<SavedStep>>(entity.stepsJson)
+        val firstFn = functions.find { it.name == steps.firstOrNull()?.function }
+        val firstArgs = steps.firstOrNull()?.args ?: JsonObject(emptyMap())
+        val missingParams = firstFn?.parameters?.filter { it.required && it.name !in firstArgs }
+
+        if (missingParams != null && missingParams.isNotEmpty()) {
+            ParamInputDialog(
+                params = missingParams,
+                onDismiss = { pendingExecution = null },
+                onConfirm = { inputs ->
+                    val mergedArgs = JsonObject(firstArgs + inputs.mapValues { (_, v) -> JsonPrimitive(v) })
+                    val workflowSteps = steps.mapIndexed { i, step ->
+                        WorkflowStep(id = i, function = step.function, args = if (i == 0) mergedArgs else step.args, pipeline = step.pipeline)
+                    }
+                    onExecute(Workflow(steps = workflowSteps, summary = entity.title))
+                    pendingExecution = null
+                },
+            )
+        } else {
+            val workflowSteps = steps.mapIndexed { i, step ->
+                WorkflowStep(id = i, function = step.function, args = step.args, pipeline = step.pipeline)
+            }
+            onExecute(Workflow(steps = workflowSteps, summary = entity.title))
+            pendingExecution = null
+        }
+    }
+
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        if (savedWorkflows.isNotEmpty()) {
+            item { Text("我的工作流", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary) }
+            items(savedWorkflows) { entity ->
+                Card(
+                    modifier = Modifier.fillMaxWidth().clickable { pendingExecution = entity },
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(entity.title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                            if (entity.description.isNotBlank()) {
+                                Text(entity.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Text("${entity.stepCount} 步 · ${entity.type.lowercase()}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        TextButton(onClick = {
+                            scope.launch { storage.delete(entity) }
+                        }) { Text("删除", color = MaterialTheme.colorScheme.error) }
+                    }
+                }
+            }
+        }
+
+        item { Spacer(Modifier.height(4.dp)) }
         item {
-            OutlinedButton(
-                onClick = showBuilder,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
+            OutlinedButton(onClick = onNewWorkflow, modifier = Modifier.fillMaxWidth()) {
                 Text("+ 创建自定义工作流")
             }
         }
-        sectionHeaders.forEach { (title, templates) ->
+
+        item { Text("预置工作流", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary) }
+        (sequentialWorkflows + pipelineWorkflows).forEach { template ->
             item {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
-                )
-            }
-            items(templates) { template ->
-                WorkflowCard(template = template, onClick = { onExecute(template.build()) })
+                Card(
+                    modifier = Modifier.fillMaxWidth().clickable { onExecute(template.build()) },
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text("${template.icon} ${template.name}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.height(4.dp))
+                        Text(template.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun WorkflowCard(template: WorkflowTemplate, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-        ),
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = "${template.icon} ${template.name}",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                TypeBadge(template.type)
+private fun ParamInputDialog(
+    params: List<com.zhoulesin.zutils.engine.core.Parameter>,
+    onDismiss: () -> Unit,
+    onConfirm: (Map<String, String>) -> Unit,
+) {
+    val inputs = remember { mutableStateMapOf<String, String>() }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("输入参数") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                params.forEach { param ->
+                    OutlinedTextField(
+                        value = inputs[param.name] ?: "",
+                        onValueChange = { inputs[param.name] = it },
+                        label = { Text(param.name) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = template.description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Composable
-private fun TypeBadge(type: WorkflowType) {
-    val (text, color) = when (type) {
-        WorkflowType.SEQUENTIAL -> "顺序" to MaterialTheme.colorScheme.tertiary
-        WorkflowType.PIPELINE -> "管道" to MaterialTheme.colorScheme.secondary
-    }
-    Surface(
-        shape = MaterialTheme.shapes.small,
-        color = color.copy(alpha = 0.2f),
-    ) {
-        Text(
-            text = text,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-            style = MaterialTheme.typography.labelSmall,
-            color = color,
-        )
-    }
+        },
+        confirmButton = { TextButton(onClick = { onConfirm(inputs.toMap()) }) { Text("执行") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
 }

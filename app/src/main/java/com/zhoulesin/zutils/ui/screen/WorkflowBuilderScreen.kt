@@ -15,6 +15,11 @@ import com.zhoulesin.zutils.engine.core.OutputType
 import com.zhoulesin.zutils.engine.core.ParameterType
 import com.zhoulesin.zutils.engine.workflow.Workflow
 import com.zhoulesin.zutils.engine.workflow.WorkflowStep
+import com.zhoulesin.zutils.data.SavedStep
+import com.zhoulesin.zutils.data.SavedWorkflow
+import com.zhoulesin.zutils.data.WorkflowStorage
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -22,8 +27,8 @@ import kotlinx.serialization.json.JsonPrimitive
 @Composable
 fun WorkflowBuilderScreen(
     functions: List<FunctionInfo>,
+    onSave: (SavedWorkflow) -> Unit,
     onBack: () -> Unit,
-    onExecute: (Workflow) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var isPipeline by remember { mutableStateOf(false) }
@@ -172,15 +177,30 @@ fun WorkflowBuilderScreen(
                     title = title.trim(),
                     description = desc.trim().ifEmpty { null },
                 )
+                val saved = SavedWorkflow(
+                    id = WorkflowStorage.buildId(),
+                    title = title.trim(),
+                    description = desc.trim(),
+                    type = if (isPipeline) "PIPELINE" else "SEQUENTIAL",
+                    steps = workflow.steps.map { step ->
+                        SavedStep(
+                            function = step.function,
+                            args = step.args,
+                            pipeline = step.pipeline,
+                        )
+                    },
+                    stepCount = workflow.steps.size,
+                )
+                onSave(saved)
                 selectedSteps.clear()
-                onExecute(workflow)
+                onBack()
             },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
             enabled = selectedSteps.isNotEmpty() && title.isNotBlank(),
         ) {
-            Text("确认并执行（${selectedSteps.size} 步）")
+            Text("保存工作流（${selectedSteps.size} 步）")
         }
         Spacer(Modifier.height(12.dp))
     }
