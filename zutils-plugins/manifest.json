@@ -3,16 +3,16 @@
     {
       "functionName": "generateQRCode",
       "version": "1.0.0",
-      "dexUrl": "dex/plugin_qrcode_v1.0.0.dex",
+      "dexUrl": "plugins/plugin_qrcode_v1.0.0.dex",
       "className": "com.zhoulesin.zutils.testfun.QRCodeFunction",
       "dependencies": [
-        { "name": "zxing-core", "version": "3.5.3", "dexUrl": "dex/lib_zxing_v3.5.3.dex" }
+        { "name": "zxing-core", "version": "3.5.3", "dexUrl": "plugins/lib_zxing_v3.5.3.dex" }
       ]
     },
     {
       "functionName": "getWeather",
       "version": "1.0.0",
-      "dexUrl": "dex/weather_v1.0.0.dex",
+      "dexUrl": "plugins/weather_v1.0.0.dex",
       "className": "com.zhoulesin.zutils.functions.weather.GetWeatherFunction"
     }
   ]

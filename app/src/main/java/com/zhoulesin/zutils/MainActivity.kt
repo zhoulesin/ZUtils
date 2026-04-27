@@ -77,7 +77,10 @@ class MainActivity : ComponentActivity() {
 
         engine = Engine(
             androidContext = this,
-            dexLoader = DefaultDexLoader(this),
+            dexLoader = DefaultDexLoader(
+                this,
+                remoteBaseUrl = "https://raw.githubusercontent.com/zhoulesin/ZUtils/main/zutils-plugins",
+            ),
         ).also {
             it.registry.register(CalculateFunction())
             it.registry.register(GetCurrentTimeFunction())

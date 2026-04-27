@@ -56,12 +56,15 @@ class Engine(
             for (dep in spec.dependencies) {
                 log.add("   └─ ${dep.name} → ${dep.dexUrl} (v${dep.version})")
             }
-            log.add("⬇️ Loading from assets...")
+            log.add("⬇️ Downloading DEX...")
             val bytes = try {
                 loader.download(spec)
             } catch (e: Exception) {
                 Log.e("ZUtils-DEX", "download failed for ${spec.dexUrl}", e)
                 log.add("❌ Download failed: ${e.message}")
+                for (ste in e.stackTrace.take(3)) {
+                    log.add("     at ${ste.className}.${ste.methodName}(${ste.fileName}:${ste.lineNumber})")
+                }
                 continue
             }
             log.add("📦 DEX size: ${bytes.size / 1024}KB, class: ${spec.className}")
