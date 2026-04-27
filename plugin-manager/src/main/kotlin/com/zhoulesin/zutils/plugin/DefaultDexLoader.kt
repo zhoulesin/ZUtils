@@ -128,18 +128,39 @@ class DefaultDexLoader(
         }
     }
 
+    private fun cacheFile(spec: DexSpec): File = File(getCacheDir(), "${spec.functionName}_${spec.version}.dex")
+
+    private fun depCacheFile(dep: DependencySpec): File = File(getCacheDir(), "${dep.name}_${dep.version}.dex")
+
     override suspend fun download(spec: DexSpec): ByteArray = withContext(Dispatchers.IO) {
-        Log.i(TAG, "Downloading ${spec.functionName} v${spec.version} from ${spec.dexUrl}")
-        readBytes(spec.dexUrl).also {
-            Log.i(TAG, "Downloaded ${spec.functionName}: ${it.size / 1024}KB")
+        val cache = cacheFile(spec)
+        if (cache.exists()) {
+            Log.i(TAG, "Cache hit for ${spec.functionName} v${spec.version}")
+            return@withContext cache.readBytes()
         }
+        Log.i(TAG, "Downloading ${spec.functionName} v${spec.version} from ${spec.dexUrl}")
+        val bytes = readBytes(spec.dexUrl)
+        getCacheDir().mkdirs()
+        cache.writeBytes(bytes)
+        Log.i(TAG, "Cached to ${cache.name} (${bytes.size / 1024}KB)")
+        for (dep in spec.dependencies) {
+            val depCache = depCacheFile(dep)
+            if (!depCache.exists()) {
+                Log.i(TAG, "Downloading dep ${dep.name} v${dep.version} from ${dep.dexUrl}")
+                val depBytes = readBytes(dep.dexUrl)
+                depCache.writeBytes(depBytes)
+                Log.i(TAG, "Cached dep ${depCache.name}")
+            }
+        }
+        bytes
     }
 
     override fun load(dexBytes: ByteArray, spec: DexSpec): List<ZFunction> {
         Log.i(TAG, "Loading ${spec.className}...")
         val allBytes = mutableListOf(dexBytes)
         for (dep in spec.dependencies) {
-            allBytes.add(readBytes(dep.dexUrl))
+            val depCache = depCacheFile(dep)
+            allBytes.add(if (depCache.exists()) depCache.readBytes() else readBytes(dep.dexUrl))
         }
 
         val loader = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

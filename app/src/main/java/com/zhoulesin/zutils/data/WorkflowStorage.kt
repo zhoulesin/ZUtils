@@ -31,9 +31,31 @@ interface WorkflowDao {
     suspend fun delete(workflow: WorkflowEntity)
 }
 
-@Database(entities = [WorkflowEntity::class], version = 1)
+@Entity(tableName = "installed_plugins")
+data class InstalledPluginEntity(
+    @PrimaryKey val functionName: String,
+    val version: String,
+    val className: String,
+    val parametersJson: String = "",
+    val installedAt: Long = System.currentTimeMillis(),
+)
+
+@Dao
+interface InstalledPluginDao {
+    @Query("SELECT * FROM installed_plugins ORDER BY installedAt DESC")
+    suspend fun loadAll(): List<InstalledPluginEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(plugin: InstalledPluginEntity)
+
+    @Query("DELETE FROM installed_plugins WHERE functionName = :functionName")
+    suspend fun delete(functionName: String)
+}
+
+@Database(entities = [WorkflowEntity::class, InstalledPluginEntity::class], version = 2)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun workflowDao(): WorkflowDao
+    abstract fun installedPluginDao(): InstalledPluginDao
 }
 
 @Serializable
@@ -53,14 +75,24 @@ data class SavedWorkflow(
     val stepCount: Int,
 )
 
-class WorkflowStorage(context: Context) {
-    private val dao by lazy {
-        Room.databaseBuilder(
-            context.applicationContext,
-            AppDatabase::class.java,
-            "zutils.db"
-        ).build().workflowDao()
+object DatabaseProvider {
+    private var instance: AppDatabase? = null
+
+    fun get(context: Context): AppDatabase {
+        if (instance == null) {
+            instance = Room.databaseBuilder(
+                context.applicationContext,
+                AppDatabase::class.java,
+                "zutils.db"
+            ).fallbackToDestructiveMigration()
+                .build()
+        }
+        return instance!!
     }
+}
+
+class WorkflowStorage(context: Context) {
+    private val dao by lazy { DatabaseProvider.get(context).workflowDao() }
 
     private val json = Json { prettyPrint = true }
 

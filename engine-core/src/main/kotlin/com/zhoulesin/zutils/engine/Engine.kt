@@ -22,6 +22,7 @@ class Engine(
     val workflowEngine: WorkflowEngine = DefaultWorkflowEngine(),
     val dexLoader: DexLoader? = null,
     val llmClient: LlmClient? = null,
+    var onPluginLoaded: ((name: String, version: String, className: String) -> Unit)? = null,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -100,6 +101,7 @@ class Engine(
                 }
                 registry.register(registered)
                 log.add("✅ Registered '${registered.info.name}' v${spec.version} from DEX")
+                onPluginLoaded?.invoke(registered.info.name, spec.version, spec.className)
             }
         }
     }

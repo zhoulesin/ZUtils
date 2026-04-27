@@ -27,6 +27,8 @@ import androidx.compose.ui.unit.dp
 import com.zhoulesin.zutils.data.PluginInfo
 import com.zhoulesin.zutils.data.PluginStorage
 import com.zhoulesin.zutils.data.PluginCatalogue
+import com.zhoulesin.zutils.data.InstalledPluginEntity
+import com.zhoulesin.zutils.data.PluginInstallRepo
 import com.zhoulesin.zutils.data.SavedWorkflow
 import com.zhoulesin.zutils.data.WorkflowStorage
 import com.zhoulesin.zutils.engine.Engine
@@ -70,10 +72,12 @@ data class HistoryEntry(
 
 class MainActivity : ComponentActivity() {
     private lateinit var engine: Engine
+    private lateinit var pluginRepo: PluginInstallRepo
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        pluginRepo = PluginInstallRepo(this)
 
         engine = Engine(
             androidContext = this,
@@ -81,6 +85,11 @@ class MainActivity : ComponentActivity() {
                 this,
                 remoteBaseUrl = "https://raw.githubusercontent.com/zhoulesin/ZUtils/main/zutils-plugins",
             ),
+            onPluginLoaded = { name, version, className ->
+                kotlinx.coroutines.MainScope().launch {
+                    pluginRepo.save(name, version, className)
+                }
+            },
         ).also {
             it.registry.register(CalculateFunction())
             it.registry.register(GetCurrentTimeFunction())
@@ -97,6 +106,10 @@ class MainActivity : ComponentActivity() {
             it.registry.register(GetScreenInfoFunction())
             it.registry.register(GetStorageInfoFunction())
             it.registry.register(GetNetworkTypeFunction())
+        }
+
+        kotlinx.coroutines.MainScope().launch {
+            engine.dexLoader?.let { pluginRepo.loadCachedPlugins(it, engine.registry) }
         }
 
         setContent {
@@ -385,7 +398,8 @@ private fun ExecuteScreen(
                 value = input,
                 onValueChange = { input = it },
                 modifier = Modifier.weight(1f),
-                placeholder = { Text("输入需求，如：计算 2+2 / 时间 / 电量 / UUID / base64 编码hello / 音量50 / 剪贴板 / 屏幕 / 存储 / 网络") },
+//                placeholder = { Text("输入需求，如：计算 2+2 / 时间 / 电量 / UUID / base64 编码hello / 音量50 / 剪贴板 / 屏幕 / 存储 / 网络") },
+                placeholder = { Text("输入你的需求") },
                 enabled = !isLoading,
                 singleLine = true,
             )
