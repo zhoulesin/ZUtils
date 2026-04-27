@@ -24,6 +24,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import com.zhoulesin.zutils.data.PluginInfo
+import com.zhoulesin.zutils.data.PluginStorage
+import com.zhoulesin.zutils.data.PluginCatalogue
 import com.zhoulesin.zutils.data.SavedWorkflow
 import com.zhoulesin.zutils.data.WorkflowStorage
 import com.zhoulesin.zutils.engine.Engine
@@ -38,11 +41,11 @@ import com.zhoulesin.zutils.engine.workflow.Workflow
 import com.zhoulesin.zutils.engine.workflow.WorkflowResult
 import com.zhoulesin.zutils.engine.workflow.WorkflowStep
 import com.zhoulesin.zutils.plugin.DefaultDexLoader
-import com.zhoulesin.zutils.ui.screen.FunctionsScreen
+import com.zhoulesin.zutils.ui.screen.PluginsScreen
 import com.zhoulesin.zutils.ui.screen.WorkflowBuilderScreen
-import com.zhoulesin.zutils.ui.screen.WorkflowsScreen
 import com.zhoulesin.zutils.ui.theme.ZUtilsTheme
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -109,13 +112,11 @@ private fun MainScreen(engine: Engine) {
     val scope = rememberCoroutineScope()
     var showBuilder by remember { mutableStateOf(false) }
     val storage = remember { WorkflowStorage(engine.androidContext) }
-    val prefs = remember { engine.androidContext.getSharedPreferences("zutils", 0) }
-    var savedKey by remember { mutableStateOf(prefs.getString("api_key", "") ?: "") }
+    val pluginStorage = remember { PluginStorage(engine.androidContext) }
+    var llmKey by remember { mutableStateOf("") }
     var showKeyDialog by remember { mutableStateOf(false) }
-    var keyInput by remember { mutableStateOf(savedKey) }
-    val llmClient = remember(savedKey) {
-        if (savedKey.isNotBlank()) VolcengineLlmClient(apiKey = savedKey) else null
-    }
+    var keyInput by remember { mutableStateOf("") }
+    val llmClient = remember(llmKey) { VolcengineLlmClient(apiKey = llmKey.ifBlank { "c11df110-89fe-45e8-a4a4-aac27e61522a" }) }
 
     if (showKeyDialog) {
         AlertDialog(
@@ -126,21 +127,17 @@ private fun MainScreen(engine: Engine) {
                     OutlinedTextField(
                         value = keyInput,
                         onValueChange = { keyInput = it },
-                        label = { Text("API Key") },
+                        label = { Text("API Key (留空使用默认)") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    Text("获取地址: 火山引擎方舟 → API Key 管理", style = MaterialTheme.typography.labelSmall)
                 }
             },
             confirmButton = {
                 TextButton(onClick = {
-                    prefs.edit().putString("api_key", keyInput).apply()
-                    savedKey = keyInput
+                    llmKey = keyInput
                     showKeyDialog = false
-                }) {
-                    Text(if (savedKey.isNotBlank()) "更新" else "保存")
-                }
+                }) { Text("确定") }
             },
             dismissButton = {
                 TextButton(onClick = { showKeyDialog = false }) { Text("取消") }
@@ -171,10 +168,10 @@ private fun MainScreen(engine: Engine) {
                 title = { Text("ZUtils AI Engine") },
                 actions = {
                     TextButton(onClick = {
-                        keyInput = savedKey
+                        keyInput = llmKey
                         showKeyDialog = true
                     }) {
-                        Text(if (savedKey.isNotBlank()) "🔗" else "⚙️")
+                        Text("🔗")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -191,49 +188,50 @@ private fun MainScreen(engine: Engine) {
                     label = { Text("执行") },
                 )
                 NavigationBarItem(
-                    selected = tab == Tab.WORKFLOWS,
-                    onClick = { tab = Tab.WORKFLOWS },
-                    icon = { Text("⚡") },
-                    label = { Text("工作流") },
-                )
-                NavigationBarItem(
-                    selected = tab == Tab.FUNCTIONS,
-                    onClick = { tab = Tab.FUNCTIONS },
-                    icon = { Text("☰") },
-                    label = { Text("函数") },
+                    selected = tab == Tab.PLUGINS,
+                    onClick = { tab = Tab.PLUGINS },
+                    icon = { Text("🧩") },
+                    label = { Text("插件") },
                 )
             }
         }
     ) { padding ->
         when (tab) {
-            Tab.EXECUTE -> ExecuteScreen(engine, history, llmClient, Modifier.padding(padding))
-            Tab.WORKFLOWS -> WorkflowsScreen(
-                functions = engine.registry.getAllInfos(),
-                storage = storage,
-                onExecute = { workflow ->
+            Tab.EXECUTE -> ExecuteScreen(engine, history, llmClient, Modifier.padding(padding)            )
+            Tab.PLUGINS -> PluginsScreen(
+                installed = pluginStorage.loadAll(),
+                catalogue = PluginCatalogue.plugins,
+                storage = pluginStorage,
+                onInstall = { plugin ->
+                    val info = PluginInfo(
+                        id = plugin.id, name = plugin.name, description = plugin.description,
+                        icon = plugin.icon, version = plugin.version, author = plugin.author,
+                        category = plugin.category, stepsJson = plugin.stepsJson,
+                    )
+                    pluginStorage.save(info)
+                    tab = Tab.PLUGINS
+                },
+                onUninstall = { plugin ->
+                    pluginStorage.delete(plugin.id)
+                    tab = Tab.PLUGINS
+                },
+                onExecute = { plugin ->
+                    val steps = Json.decodeFromString<List<WorkflowStep>>(plugin.stepsJson)
+                    val workflow = Workflow(steps = steps, summary = plugin.name)
                     scope.launch {
-                        val label = workflow.summary ?: workflow.steps.joinToString(" + ") { it.function }
-                        val params = workflow.steps.firstOrNull()?.args?.let { args ->
-                            val m = mutableMapOf<String, String>()
-                            for ((k, v) in args) {
-                                if (v is JsonPrimitive) m[k] = v.content
-                            }
-                            m
-                        } ?: emptyMap()
                         val result = runQueryRaw(engine, workflow)
-                        history.add(0, HistoryEntry(label, EntryType.WORKFLOW, params, result))
+                        history.add(0, HistoryEntry(plugin.name, EntryType.WORKFLOW, result = result))
                         tab = Tab.EXECUTE
                     }
                 },
                 onNewWorkflow = { showBuilder = true },
                 modifier = Modifier.padding(padding),
             )
-            Tab.FUNCTIONS -> FunctionsScreen(engine.registry.getAllInfos(), Modifier.padding(padding))
         }
     }
 }
 
-private enum class Tab { EXECUTE, WORKFLOWS, FUNCTIONS }
+private enum class Tab { EXECUTE, PLUGINS }
 
 @Composable
 private fun ExecuteScreen(

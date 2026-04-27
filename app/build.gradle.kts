@@ -53,6 +53,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(project(":engine-core"))
     implementation(project(":plugin-manager"))
+    implementation(project(":llm-manager"))
 //    implementation(project(":qrcode-function"))
     implementation(project(":functions:calculate"))
     implementation(project(":functions:uuid"))
