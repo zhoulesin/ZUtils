@@ -1,5 +1,6 @@
 package com.zhoulesin.zutils.functions.weather
 
+import android.util.Log
 import com.zhoulesin.zutils.engine.core.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -11,6 +12,8 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.net.URL
 
+private const val TAG = "ZUtils-LLM"
+
 class GetWeatherFunction : ZFunction {
     override val info = FunctionInfo(
         name = "getWeather",
@@ -18,7 +21,7 @@ class GetWeatherFunction : ZFunction {
         parameters = listOf(
             Parameter(
                 name = "city",
-                description = "City name in English or Chinese, e.g. Beijing, 上海, Tokyo",
+                description = "City name preferably in English, e.g. Beijing, Tokyo, London, Wuhan. Chinese names like 上海 also supported but English is more reliable.",
                 type = ParameterType.STRING,
                 required = true,
             )
@@ -30,9 +33,15 @@ class GetWeatherFunction : ZFunction {
         val city = args["city"]?.jsonPrimitive?.content
             ?: return@withContext ZResult.fail("Missing required argument: city", "MISSING_ARG")
 
+        Log.i(TAG, "getWeather: city=$city")
+
         return@withContext try {
-            val url = "https://wttr.in/${java.net.URLEncoder.encode(city, "UTF-8")}?format=j1"
+            val encodedCity = java.net.URLEncoder.encode(city, "UTF-8")
+            val url = "https://wttr.in/$encodedCity?format=j1"
+            Log.i(TAG, "getWeather: url=$url")
             val jsonText = URL(url).readText()
+            Log.i(TAG, "getWeather: response=${jsonText.take(500)}")
+
             val root = kotlinx.serialization.json.Json.parseToJsonElement(jsonText).jsonObject
             val current = root["current_condition"]?.jsonArray?.firstOrNull()?.jsonObject
                 ?: return@withContext ZResult.fail("No weather data for city: $city", "NO_DATA")
@@ -43,6 +52,8 @@ class GetWeatherFunction : ZFunction {
             val windSpeed = current["windspeedKmph"]?.jsonPrimitive?.content ?: "?"
             val feelsLike = current["FeelsLikeC"]?.jsonPrimitive?.content ?: "?"
 
+            Log.i(TAG, "getWeather: result city=$city temp=$temp condition=$desc")
+
             ZResult.Success(JsonObject(buildMap {
                 put("city", JsonPrimitive(city))
                 put("temperature", JsonPrimitive("${temp}°C"))
@@ -52,6 +63,7 @@ class GetWeatherFunction : ZFunction {
                 put("windSpeed", JsonPrimitive("${windSpeed} km/h"))
             }))
         } catch (e: Exception) {
+            Log.w(TAG, "getWeather: failed city=$city error=${e.message}", e)
             ZResult.fail("Weather query failed: ${e.message}", "API_ERROR")
         }
     }

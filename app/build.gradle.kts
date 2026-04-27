@@ -58,6 +58,7 @@ dependencies {
     implementation(project(":functions:calculate"))
     implementation(project(":functions:uuid"))
     implementation(project(":functions:time"))
+    implementation(project(":functions:weather"))
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)

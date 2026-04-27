@@ -94,6 +94,7 @@ class MainActivity : ComponentActivity() {
             it.registry.register(GetScreenInfoFunction())
             it.registry.register(GetStorageInfoFunction())
             it.registry.register(GetNetworkTypeFunction())
+            it.registry.register(com.zhoulesin.zutils.functions.weather.GetWeatherFunction())
         }
 
         setContent {

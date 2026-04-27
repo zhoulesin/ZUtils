@@ -96,7 +96,7 @@ class VolcengineLlmClient(
                 }
             )))
             put("tools", JsonArray(tools))
-            put("tool_choice", "auto")
+            put("tool_choice", "required")
             put("temperature", 0.1)
         }
 
@@ -108,10 +108,7 @@ class VolcengineLlmClient(
 
         val toolCalls = message.tool_calls
         if (toolCalls.isNullOrEmpty()) {
-            val text = message.content ?: "无响应"
-            return Workflow(listOf(
-                WorkflowStep(function = "toast", args = JsonObject(mapOf("message" to JsonPrimitive(text))))
-            ), summary = text)
+            return Workflow(emptyList(), summary = message.content ?: "无响应")
         }
 
         val steps = toolCalls.mapIndexed { i, tc ->
@@ -191,6 +188,8 @@ class VolcengineLlmClient(
         sb.appendLine("2. 必要时一次性返回多个 tool_calls")
         sb.appendLine("3. 每个步骤的入参从用户输入中提取")
         sb.appendLine("4. 不需要参数的函数传入空对象 {}")
+        sb.appendLine("5. 你必须始终通过函数调用（tool_calls）响应，禁止返回任何纯文字。")
+        sb.appendLine("6. 没有任何函数能处理用户请求时，也必须调用 toast 函数并说明情况，绝不能返回文字。")
         return sb.toString()
     }
 }
