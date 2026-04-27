@@ -1,5 +1,6 @@
 package com.zhoulesin.zutils.llm
 
+import android.util.Log
 import com.zhoulesin.zutils.engine.core.FunctionInfo
 import com.zhoulesin.zutils.engine.core.MediaType
 import com.zhoulesin.zutils.engine.core.OutputType
@@ -19,6 +20,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
@@ -100,7 +102,15 @@ class VolcengineLlmClient(
             put("temperature", 0.1)
         }
 
-        val response = post(body.toString())
+        val bodyStr = body.toString()
+        Log.i("ZUtils-LLM", "→ tools: ${tools.size}")
+        for ((i, t) in tools.withIndex()) {
+            Log.i("ZUtils-LLM", "   tool[$i]: name=${t["function"]?.jsonObject?.get("name")} params=${t["function"]?.jsonObject?.get("parameters")}")
+        }
+        Log.i("ZUtils-LLM", "→ request body: ${bodyStr.take(2000)}")
+
+        val response = post(bodyStr)
+        Log.i("ZUtils-LLM", "← raw response: ${response.take(2000)}")
         val chatResp = json.decodeFromString<ChatResponse>(response)
 
         val message = chatResp.choices.firstOrNull()?.message
@@ -108,13 +118,16 @@ class VolcengineLlmClient(
 
         val toolCalls = message.tool_calls
         if (toolCalls.isNullOrEmpty()) {
+            Log.w("ZUtils-LLM", "← no tool_calls, content=${message.content}")
             return Workflow(emptyList(), summary = message.content ?: "无响应")
         }
 
         val steps = toolCalls.mapIndexed { i, tc ->
+            Log.i("ZUtils-LLM", "← tool_call[$i]: name=${tc.function.name} args=${tc.function.arguments}")
             val args = try {
                 json.decodeFromString<JsonObject>(tc.function.arguments)
             } catch (_: Exception) {
+                Log.w("ZUtils-LLM", "   args parse failed, using empty")
                 JsonObject(emptyMap())
             }
             WorkflowStep(id = i, function = tc.function.name, args = args)

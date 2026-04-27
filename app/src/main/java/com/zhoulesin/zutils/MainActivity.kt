@@ -97,7 +97,6 @@ class MainActivity : ComponentActivity() {
             it.registry.register(GetScreenInfoFunction())
             it.registry.register(GetStorageInfoFunction())
             it.registry.register(GetNetworkTypeFunction())
-            it.registry.register(com.zhoulesin.zutils.functions.weather.GetWeatherFunction())
         }
 
         setContent {
@@ -431,7 +430,7 @@ private suspend fun runQuery(engine: Engine, query: String, llmClient: LlmClient
     val workflow = if (llmClient != null) {
         try {
             Log.i("ZUtils-LLM", "→ 发送请求到 LLM...")
-            val wf = llmClient.parseIntent(query, engine.registry.getAllInfos())
+            val wf = llmClient.parseIntent(query, engine.getAllAvailableInfos())
             Log.i("ZUtils-LLM", "← LLM 返回: ${wf.steps.size} 个步骤")
             for (step in wf.steps) {
                 Log.i("ZUtils-LLM", "   - ${step.function} args=${step.args}")

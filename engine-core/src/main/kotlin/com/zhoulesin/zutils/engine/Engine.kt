@@ -3,6 +3,7 @@ package com.zhoulesin.zutils.engine
 import android.content.Context
 import android.util.Log
 import com.zhoulesin.zutils.engine.core.ExecutionContext
+import com.zhoulesin.zutils.engine.core.FunctionInfo
 import com.zhoulesin.zutils.engine.core.FunctionRegistry
 import com.zhoulesin.zutils.engine.dex.DexLoader
 import com.zhoulesin.zutils.engine.llm.LlmClient
@@ -103,12 +104,25 @@ class Engine(
         }
     }
 
+    suspend fun getAllAvailableInfos(): List<FunctionInfo> {
+        val builtIn = registry.getAllInfos()
+        val builtInNames = builtIn.map { it.name }.toSet()
+        val pluginInfos = dexLoader?.getAllPluginInfos() ?: emptyList()
+        val result = builtIn + pluginInfos.filter { it.name !in builtInNames }
+        Log.i("ZUtils-DEX", "Available functions: ${result.size} total (${builtIn.size} built-in + ${pluginInfos.size} plugin)")
+        for (fn in result) {
+            val req = fn.parameters.filter { it.required }.map { it.name }
+            Log.i("ZUtils-DEX", "   ${fn.name}: req=[${req.joinToString()}] desc='${fn.description}'")
+        }
+        return result
+    }
+
     suspend fun executeWithLlm(
         userInput: String,
     ): WorkflowResult {
         val client = llmClient
             ?: throw IllegalStateException("LlmClient not configured")
-        val workflow = client.parseIntent(userInput, registry.getAllInfos())
+        val workflow = client.parseIntent(userInput, getAllAvailableInfos())
         return execute(workflow)
     }
 }

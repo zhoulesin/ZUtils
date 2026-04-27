@@ -3,6 +3,11 @@ package com.zhoulesin.zutils.plugin
 import android.content.Context
 import android.os.Build
 import android.util.Log
+import com.zhoulesin.zutils.engine.core.FunctionInfo
+import com.zhoulesin.zutils.engine.core.FunctionSource
+import com.zhoulesin.zutils.engine.core.OutputType
+import com.zhoulesin.zutils.engine.core.Parameter
+import com.zhoulesin.zutils.engine.core.ParameterType
 import com.zhoulesin.zutils.engine.core.ZFunction
 import com.zhoulesin.zutils.engine.dex.DependencySpec
 import com.zhoulesin.zutils.engine.dex.DexLoader
@@ -27,11 +32,21 @@ data class ManifestDep(
 )
 
 @Serializable
+data class ManifestParam(
+    val name: String,
+    val description: String = "",
+    val type: String = "STRING",
+    val required: Boolean = false,
+)
+
+@Serializable
 data class ManifestPlugin(
     val functionName: String,
+    val description: String = "",
     val version: String,
     val dexUrl: String,
     val className: String,
+    val parameters: List<ManifestParam> = emptyList(),
     val dependencies: List<ManifestDep> = emptyList(),
 )
 
@@ -48,37 +63,52 @@ class DefaultDexLoader(
     private var specMap: Map<String, DexSpec>? = null
     private val mutex = Any()
 
+    private suspend fun fetchManifestText(): String = withContext(Dispatchers.IO) {
+        if (remoteBaseUrl != null) {
+            URL("$remoteBaseUrl/manifest.json").readText()
+        } else {
+            context.assets.open("dex/dex_manifest.json").bufferedReader().readText()
+        }
+    }
+
     private suspend fun ensureSpecsLoaded(): Map<String, DexSpec> {
         specMap?.let { return it }
+        val manifestUrl = if (remoteBaseUrl != null) "$remoteBaseUrl/manifest.json" else "assets://dex/dex_manifest.json"
+        val json = try {
+            fetchManifestText()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load manifest from $manifestUrl", e)
+            throw e
+        }
         return synchronized(mutex) {
             specMap?.let { return@synchronized it }
-            val manifestUrl = if (remoteBaseUrl != null) "$remoteBaseUrl/manifest.json" else "assets://dex/dex_manifest.json"
-            try {
-                val json = withContext(Dispatchers.IO) {
-                    if (remoteBaseUrl != null) {
-                        URL("$remoteBaseUrl/manifest.json").readText()
-                    } else {
-                        context.assets.open("dex/dex_manifest.json").bufferedReader().readText()
-                    }
+            val manifest = Json.decodeFromString<DexManifest>(json)
+            val map = manifest.plugins.map { p ->
+                Log.i(TAG, "Manifest plugin: ${p.functionName} description='${p.description}' params=${p.parameters.size}")
+                for (mp in p.parameters) {
+                    Log.i(TAG, "   param: ${mp.name} type=${mp.type} required=${mp.required} desc='${mp.description}'")
                 }
-                val manifest = Json.decodeFromString<DexManifest>(json)
-                val map = manifest.plugins.map { p ->
-                    DexSpec(
-                        functionName = p.functionName,
-                        dexUrl = p.dexUrl,
-                        className = p.className,
-                        version = p.version,
-                        dependencies = p.dependencies.map { d ->
-                            DependencySpec(name = d.name, dexUrl = d.dexUrl, version = d.version)
-                        },
-                    )
-                }.associateBy { it.functionName }
-                specMap = map
-                map
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to load manifest from $manifestUrl", e)
-                throw e
-            }
+                DexSpec(
+                    functionName = p.functionName,
+                    description = p.description,
+                    parameters = p.parameters.map { mp ->
+                        Parameter(
+                            name = mp.name,
+                            description = mp.description,
+                            type = try { ParameterType.valueOf(mp.type) } catch (_: Exception) { ParameterType.STRING },
+                            required = mp.required,
+                        )
+                    },
+                    dexUrl = p.dexUrl,
+                    className = p.className,
+                    version = p.version,
+                    dependencies = p.dependencies.map { d ->
+                        DependencySpec(name = d.name, dexUrl = d.dexUrl, version = d.version)
+                    },
+                )
+            }.associateBy { it.functionName }
+            specMap = map
+            map
         }
     }
 
@@ -136,6 +166,19 @@ class DefaultDexLoader(
             Log.e(TAG, "Failed to instantiate ${spec.className}", e)
             throw e
         }
+    }
+
+    override suspend fun getAllPluginInfos(): List<FunctionInfo> {
+        ensureSpecsLoaded()
+        return specMap?.values?.map { spec ->
+            FunctionInfo(
+                name = spec.functionName,
+                description = spec.description,
+                parameters = spec.parameters,
+                source = FunctionSource.DEX,
+                outputType = OutputType.OBJECT,
+            )
+        } ?: emptyList()
     }
 
     override fun getCacheDir(): File = File(context.cacheDir, "dex_cache")

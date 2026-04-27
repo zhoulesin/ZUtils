@@ -1,5 +1,7 @@
 package com.zhoulesin.zutils.engine.dex
 
+import com.zhoulesin.zutils.engine.core.Parameter
+
 data class DependencySpec(
     val name: String,
     val dexUrl: String,
@@ -9,6 +11,8 @@ data class DependencySpec(
 
 data class DexSpec(
     val functionName: String,
+    val description: String = "",
+    val parameters: List<Parameter> = emptyList(),
     val dexUrl: String,
     val className: String,
     val version: String = "1.0",
