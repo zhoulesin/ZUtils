@@ -100,8 +100,6 @@ class MainActivity : ComponentActivity() {
             it.registry.register(SetScreenBrightnessFunction())
             it.registry.register(GetDeviceInfoFunction())
             it.registry.register(ToastFunction())
-            // it.registry.register(UuidFunction())  // 使用云端插件
-            it.registry.register(Base64Function())
             it.registry.register(GetVolumeFunction())
             it.registry.register(SetVolumeFunction())
             it.registry.register(SetClipboardFunction())
