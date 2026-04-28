@@ -49,7 +49,12 @@ class Engine(
         for (step in workflow.steps) {
             if (registry.contains(step.function)) continue
             log.add("🔍 '${step.function}' not in registry, trying DEX loader...")
-            val spec = loader.resolve(step.function)
+            var spec = loader.resolve(step.function)
+            if (spec == null) {
+                log.add("🔄 Refreshing manifest...")
+                loader.refresh()
+                spec = loader.resolve(step.function)
+            }
             if (spec == null) {
                 log.add("❌ No DEX found for '${step.function}'")
                 continue

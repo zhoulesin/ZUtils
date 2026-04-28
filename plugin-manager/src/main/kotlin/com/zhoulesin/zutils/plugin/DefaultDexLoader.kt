@@ -216,6 +216,11 @@ class DefaultDexLoader(
 
     override fun getCacheDir(): File = File(context.cacheDir, "dex_cache")
 
+    override suspend fun refresh() {
+        synchronized(mutex) { specMap = null }
+        ensureSpecsLoaded()
+    }
+
     private fun hasHandleMethod(clazz: Class<*>): Boolean {
         return try {
             clazz.getMethod("handle", String::class.java)

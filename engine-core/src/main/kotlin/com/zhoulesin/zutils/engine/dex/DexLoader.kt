@@ -9,4 +9,5 @@ interface DexLoader {
     fun load(dexBytes: ByteArray, spec: DexSpec): List<ZFunction>
     suspend fun getAllPluginInfos(): List<FunctionInfo>
     fun getCacheDir(): java.io.File
+    suspend fun refresh()
 }
