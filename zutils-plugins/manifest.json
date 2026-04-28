@@ -22,18 +22,6 @@
       "dexUrl" : "plugins/lib_zxing_v3.5.3.dex"
     } ]
   }, {
-    "functionName" : "getWeather",
-    "description" : "Query real-time weather for a city. Returns temperature, weather condition, humidity, wind speed.",
-    "version" : "1.0.0",
-    "dexUrl" : "plugins/weather_v1.0.0.dex",
-    "className" : "com.zhoulesin.zutils.functions.weather.GetWeatherFunction",
-    "parameters" : [ {
-      "name" : "city",
-      "description" : "City name preferably in English, e.g. Beijing, Tokyo, London, Wuhan. Chinese names like 上海 also supported but English is more reliable.",
-      "type" : "STRING",
-      "required" : true
-    } ]
-  }, {
     "functionName" : "greet",
     "description" : "Generate a greeting",
     "version" : "1.0.0",
