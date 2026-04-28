@@ -1,53 +1,57 @@
 {
-  "plugins": [
-    {
-      "functionName": "generateQRCode",
-      "description": "Generate a QR code image from text content and return as base64 PNG",
-      "version": "1.0.0",
-      "dexUrl": "plugins/plugin_qrcode_v1.0.0.dex",
-      "className": "com.zhoulesin.zutils.testfun.QRCodeFunction",
-      "parameters": [
-        {
-          "name": "content",
-          "description": "The text content to encode into QR code",
-          "type": "STRING",
-          "required": true
-        },
-        {
-          "name": "size",
-          "description": "QR code image size in pixels (default 300)",
-          "type": "INTEGER",
-          "required": false
-        }
-      ],
-      "dependencies": [
-        { "name": "zxing-core", "version": "3.5.3", "dexUrl": "plugins/lib_zxing_v3.5.3.dex" }
-      ]
-    },
-    {
-      "functionName": "getWeather",
-      "description": "Query real-time weather for a city. Returns temperature, weather condition, humidity, wind speed.",
-      "version": "1.0.0",
-      "dexUrl": "plugins/weather_v1.0.0.dex",
-      "className": "com.zhoulesin.zutils.functions.weather.GetWeatherFunction",
-      "parameters": [
-        {
-          "name": "city",
-          "description": "City name preferably in English, e.g. Beijing, Tokyo, London, Wuhan. Chinese names like 上海 also supported but English is more reliable.",
-          "type": "STRING",
-          "required": true
-        }
-      ]
-    },
-    {
-      "functionName": "greet",
-      "description": "Generate a greeting",
-      "version": "1.0.0",
-      "dexUrl": "dex/plugin_greet_v1.0.0.dex",
-      "className": "com.zutils.generated.greetFunction",
-      "parameters": [
-        { "name": "name", "description": "Name to greet", "type": "STRING", "required": true }
-      ]
-    }
-  ]
+  "plugins" : [ {
+    "functionName" : "generateQRCode",
+    "description" : "Generate a QR code image from text content and return as base64 PNG",
+    "version" : "1.0.0",
+    "dexUrl" : "plugins/plugin_qrcode_v1.0.0.dex",
+    "className" : "com.zhoulesin.zutils.testfun.QRCodeFunction",
+    "parameters" : [ {
+      "name" : "content",
+      "description" : "The text content to encode into QR code",
+      "type" : "STRING",
+      "required" : true
+    }, {
+      "name" : "size",
+      "description" : "QR code image size in pixels (default 300)",
+      "type" : "INTEGER",
+      "required" : false
+    } ],
+    "dependencies" : [ {
+      "name" : "zxing-core",
+      "version" : "3.5.3",
+      "dexUrl" : "plugins/lib_zxing_v3.5.3.dex"
+    } ]
+  }, {
+    "functionName" : "getWeather",
+    "description" : "Query real-time weather for a city. Returns temperature, weather condition, humidity, wind speed.",
+    "version" : "1.0.0",
+    "dexUrl" : "plugins/weather_v1.0.0.dex",
+    "className" : "com.zhoulesin.zutils.functions.weather.GetWeatherFunction",
+    "parameters" : [ {
+      "name" : "city",
+      "description" : "City name preferably in English, e.g. Beijing, Tokyo, London, Wuhan. Chinese names like 上海 also supported but English is more reliable.",
+      "type" : "STRING",
+      "required" : true
+    } ]
+  }, {
+    "functionName" : "greet",
+    "description" : "Generate a greeting",
+    "version" : "1.0.0",
+    "dexUrl" : "dex/plugin_greet_v1.0.0.dex",
+    "className" : "com.zutils.generated.greetFunction",
+    "parameters" : [ {
+      "name" : "name",
+      "description" : "Name to greet",
+      "type" : "STRING",
+      "required" : true
+    } ]
+  }, {
+    "functionName" : "calculator",
+    "description" : "",
+    "version" : "1.0.0",
+    "dexUrl" : "dex/plugin_calculator_v1.0.0.dex",
+    "className" : "com.zutils.generated.calculatorFunction",
+    "parameters" : [ ],
+    "dependencies" : [ ]
+  } ]
 }
