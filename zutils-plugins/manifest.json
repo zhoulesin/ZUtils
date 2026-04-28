@@ -29,5 +29,13 @@
     "className" : "com.zutils.generated.uuidFunction",
     "parameters" : [ ],
     "dependencies" : [ ]
+  }, {
+    "functionName" : "greet",
+    "description" : "",
+    "version" : "1.0.0",
+    "dexUrl" : "dex/plugin_greet_v1.0.0.dex",
+    "className" : "com.zutils.generated.greetFunction",
+    "parameters" : [ ],
+    "dependencies" : [ ]
   } ]
 }
