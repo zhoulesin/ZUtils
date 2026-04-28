@@ -38,6 +38,16 @@
           "required": true
         }
       ]
+    },
+    {
+      "functionName": "greet",
+      "description": "Generate a greeting",
+      "version": "1.0.0",
+      "dexUrl": "dex/plugin_greet_v1.0.0.dex",
+      "className": "com.zutils.generated.greetFunction",
+      "parameters": [
+        { "name": "name", "description": "Name to greet", "type": "STRING", "required": true }
+      ]
     }
   ]
 }

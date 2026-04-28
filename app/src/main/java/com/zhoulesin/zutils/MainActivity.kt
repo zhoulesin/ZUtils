@@ -37,8 +37,8 @@ import com.zhoulesin.zutils.engine.functions.*
 import com.zhoulesin.zutils.functions.calculate.CalculateFunction
 import com.zhoulesin.zutils.functions.time.GetCurrentTimeFunction
 import com.zhoulesin.zutils.functions.uuid.UuidFunction
-import com.zhoulesin.zutils.llm.VolcengineLlmClient
 import com.zhoulesin.zutils.engine.llm.LlmClient
+import com.zhoulesin.zutils.llm.ServerLlmClient
 import com.zhoulesin.zutils.engine.workflow.Workflow
 import com.zhoulesin.zutils.engine.workflow.WorkflowResult
 import com.zhoulesin.zutils.engine.workflow.WorkflowStep
@@ -129,37 +129,9 @@ private fun MainScreen(engine: Engine) {
     var showBuilder by remember { mutableStateOf(false) }
     val storage = remember { WorkflowStorage(engine.androidContext) }
     val pluginStorage = remember { PluginStorage(engine.androidContext) }
-    var llmKey by remember { mutableStateOf("") }
-    var showKeyDialog by remember { mutableStateOf(false) }
-    var keyInput by remember { mutableStateOf("") }
-    val llmClient = remember(llmKey) { VolcengineLlmClient(apiKey = llmKey.ifBlank { "c11df110-89fe-45e8-a4a4-aac27e61522a" }) }
-
-    if (showKeyDialog) {
-        AlertDialog(
-            onDismissRequest = { showKeyDialog = false },
-            title = { Text("火山引擎 API Key") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = keyInput,
-                        onValueChange = { keyInput = it },
-                        label = { Text("API Key (留空使用默认)") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    llmKey = keyInput
-                    showKeyDialog = false
-                }) { Text("确定") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showKeyDialog = false }) { Text("取消") }
-            },
-        )
-    }
+//    val serverBaseUrl = "http://10.0.2.2:8080"
+    val serverBaseUrl = "http://192.168.50.119:8080"
+    val llmClient = remember { ServerLlmClient(serverBaseUrl) }
 
     if (showBuilder) {
         WorkflowBuilderScreen(
@@ -182,14 +154,7 @@ private fun MainScreen(engine: Engine) {
         topBar = {
             TopAppBar(
                 title = { Text("ZUtils AI Engine") },
-                actions = {
-                    TextButton(onClick = {
-                        keyInput = llmKey
-                        showKeyDialog = true
-                    }) {
-                        Text("🔗")
-                    }
-                },
+                actions = {},
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                 )

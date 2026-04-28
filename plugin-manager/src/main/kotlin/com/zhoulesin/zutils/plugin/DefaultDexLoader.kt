@@ -180,9 +180,21 @@ class DefaultDexLoader(
 
         return try {
             val clazz = loader.loadClass(spec.className)
-            val instance = clazz.getDeclaredConstructor().newInstance() as ZFunction
-            Log.i(TAG, "Loaded ${spec.functionName} from ${spec.className}")
-            listOf(instance)
+            val instance = clazz.getDeclaredConstructor().newInstance()
+            val function = when {
+                instance is ZFunction -> {
+                    Log.i(TAG, "Loaded ZFunction ${spec.functionName} from ${spec.className}")
+                    instance
+                }
+                hasHandleMethod(clazz) -> {
+                    Log.i(TAG, "Loaded handle-protocol function ${spec.functionName} from ${spec.className}")
+                    DexFunctionAdapter(instance, spec)
+                }
+                else -> {
+                    throw ClassCastException("${spec.className} does not implement ZFunction or handle(String)String")
+                }
+            }
+            listOf(function)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to instantiate ${spec.className}", e)
             throw e
@@ -203,4 +215,13 @@ class DefaultDexLoader(
     }
 
     override fun getCacheDir(): File = File(context.cacheDir, "dex_cache")
+
+    private fun hasHandleMethod(clazz: Class<*>): Boolean {
+        return try {
+            clazz.getMethod("handle", String::class.java)
+            true
+        } catch (_: NoSuchMethodException) {
+            false
+        }
+    }
 }
