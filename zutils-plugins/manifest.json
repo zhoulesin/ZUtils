@@ -57,5 +57,13 @@
     "className" : "com.zutils.generated.uuidFunction",
     "parameters" : [ ],
     "dependencies" : [ ]
+  }, {
+    "functionName" : "uuid",
+    "description" : "",
+    "version" : "1.0.0",
+    "dexUrl" : "dex/plugin_uuid_v1.0.0.dex",
+    "className" : "com.zutils.generated.uuidFunction",
+    "parameters" : [ ],
+    "dependencies" : [ ]
   } ]
 }
