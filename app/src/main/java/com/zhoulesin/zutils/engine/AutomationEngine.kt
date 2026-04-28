@@ -17,7 +17,7 @@ class AutomationEngine(
     private val json = Json { ignoreUnknownKeys = true }
 
     companion object {
-        val MCP_TOOLS = setOf("weather_current", "translate_text")
+        val MCP_TOOLS = setOf("weather_current", "translate_text", "news_headlines", "geo_location")
     }
 
     /**
