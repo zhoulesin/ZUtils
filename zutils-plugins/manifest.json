@@ -34,5 +34,28 @@
       "required" : false
     } ],
     "dependencies" : [ ]
+  }, {
+    "functionName" : "calculator",
+    "description" : "",
+    "version" : "1.0.0",
+    "dexUrl" : "dex/plugin_calculator_v1.0.0.dex",
+    "className" : "com.zutils.generated.calculatorFunction",
+    "parameters" : [ {
+      "name" : "a",
+      "description" : "",
+      "type" : "INTEGER",
+      "required" : false
+    }, {
+      "name" : "b",
+      "description" : "",
+      "type" : "INTEGER",
+      "required" : false
+    }, {
+      "name" : "op",
+      "description" : "",
+      "type" : "STRING",
+      "required" : false
+    } ],
+    "dependencies" : [ ]
   } ]
 }
