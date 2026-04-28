@@ -70,5 +70,18 @@
       "required" : false
     } ],
     "dependencies" : [ ]
+  }, {
+    "functionName" : "strLength",
+    "description" : "",
+    "version" : "1.0.0",
+    "dexUrl" : "dex/plugin_strLength_v1.0.0.dex",
+    "className" : "com.zutils.generated.strLengthFunction",
+    "parameters" : [ {
+      "name" : "text",
+      "description" : "",
+      "type" : "STRING",
+      "required" : false
+    } ],
+    "dependencies" : [ ]
   } ]
 }
