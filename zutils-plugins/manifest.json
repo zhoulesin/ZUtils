@@ -83,5 +83,18 @@
       "required" : false
     } ],
     "dependencies" : [ ]
+  }, {
+    "functionName" : "lowercase",
+    "description" : "",
+    "version" : "1.0.0",
+    "dexUrl" : "dex/plugin_lowercase_v1.0.0.dex",
+    "className" : "com.zutils.generated.lowercaseFunction",
+    "parameters" : [ {
+      "name" : "text",
+      "description" : "",
+      "type" : "STRING",
+      "required" : false
+    } ],
+    "dependencies" : [ ]
   } ]
 }
