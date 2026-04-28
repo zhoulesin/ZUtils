@@ -10,6 +10,8 @@ data class WorkflowStep(
     val args: JsonObject = JsonObject(emptyMap()),
     val description: String? = null,
     val pipeline: Map<String, String> = emptyMap(),
+    val type: String = "local",
+    val result: String? = null,
 )
 
 @Serializable

@@ -78,6 +78,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         pluginRepo = PluginInstallRepo(this)
+        val db = com.zhoulesin.zutils.data.DatabaseProvider.get(this)
+        val autoDao = db.automationRuleDao()
+        val autoEngine = com.zhoulesin.zutils.engine.AutomationEngine(this, autoDao)
 
         engine = Engine(
             androidContext = this,
@@ -106,6 +109,13 @@ class MainActivity : ComponentActivity() {
             it.registry.register(GetScreenInfoFunction())
             it.registry.register(GetStorageInfoFunction())
             it.registry.register(GetNetworkTypeFunction())
+            it.registry.register(com.zhoulesin.zutils.engine.functions.SendNotificationFunction())
+            it.registry.register(com.zhoulesin.zutils.engine.functions.CreateAutomationFunction(autoEngine))
+        }
+
+        // Reschedule all enabled automation rules on startup
+        kotlinx.coroutines.MainScope().launch {
+            autoEngine.rescheduleAll()
         }
 
         kotlinx.coroutines.MainScope().launch {
@@ -130,7 +140,7 @@ private fun MainScreen(engine: Engine) {
     val storage = remember { WorkflowStorage(engine.androidContext) }
     val pluginStorage = remember { PluginStorage(engine.androidContext) }
 //    val serverBaseUrl = "http://10.0.2.2:8080"
-    val serverBaseUrl = "http://192.168.50.119:8080"
+    val serverBaseUrl = "http://10.0.2.2:8080"
     val llmClient = remember { ServerLlmClient(serverBaseUrl) }
 
     if (showBuilder) {

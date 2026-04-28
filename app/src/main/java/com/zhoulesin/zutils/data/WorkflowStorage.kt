@@ -52,10 +52,11 @@ interface InstalledPluginDao {
     suspend fun delete(functionName: String)
 }
 
-@Database(entities = [WorkflowEntity::class, InstalledPluginEntity::class], version = 2)
+@Database(entities = [WorkflowEntity::class, InstalledPluginEntity::class, AutomationRule::class], version = 3)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun workflowDao(): WorkflowDao
     abstract fun installedPluginDao(): InstalledPluginDao
+    abstract fun automationRuleDao(): AutomationRuleDao
 }
 
 @Serializable

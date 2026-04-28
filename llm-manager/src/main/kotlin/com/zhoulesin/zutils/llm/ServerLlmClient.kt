@@ -81,7 +81,10 @@ class ServerLlmClient(
                 val obj = stepJson.jsonObject
                 val name = obj["function"]?.jsonPrimitive?.contentOrNull ?: ""
                 val argsObj = obj["args"]?.jsonObject ?: JsonObject(emptyMap())
-                WorkflowStep(id = i, function = name, args = argsObj)
+                val stepType = obj["type"]?.jsonPrimitive?.contentOrNull ?: "local"
+                val stepResult = obj["result"]?.jsonPrimitive?.contentOrNull
+                WorkflowStep(id = i, function = name, args = argsObj,
+                    type = stepType, result = stepResult)
             }
             Workflow(steps = steps, summary = userInput)
 

@@ -47,6 +47,7 @@ class Engine(
     private suspend fun resolveMissingFunctions(workflow: Workflow, log: MutableList<String>) {
         val loader = dexLoader ?: return
         for (step in workflow.steps) {
+            if (step.type == "mcp") continue
             if (registry.contains(step.function)) continue
             log.add("🔍 '${step.function}' not in registry, trying DEX loader...")
             var spec = loader.resolve(step.function)

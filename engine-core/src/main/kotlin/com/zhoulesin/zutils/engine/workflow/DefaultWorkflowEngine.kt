@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlin.system.measureTimeMillis
 
 class DefaultWorkflowEngine : WorkflowEngine {
@@ -23,6 +24,23 @@ class DefaultWorkflowEngine : WorkflowEngine {
 
         for ((index, step) in workflow.steps.withIndex()) {
             if (context.cancelled) break
+
+            if (step.type == "mcp") {
+                val resultText = step.result ?: ""
+                val stepResult = ZResult.ok(resultText)
+                stepResults.add(
+                    StepResult(
+                        stepId = index,
+                        function = step.function,
+                        result = stepResult,
+                        durationMs = 0,
+                    )
+                )
+                if (stepResult is ZResult.Success) {
+                    pipelineResults[index] = stepResult.data
+                }
+                continue
+            }
 
             val function = context.registry.get(step.function)
             if (function == null) {
