@@ -83,7 +83,7 @@ class MainActivity : ComponentActivity() {
             androidContext = this,
             dexLoader = DefaultDexLoader(
                 this,
-                remoteBaseUrl = "https://raw.githubusercontent.com/zhoulesin/ZUtils/main/zutils-plugins",
+                remoteBaseUrl = "https://raw.githubusercontent.com/zhoulesin/ZUtils-plugins/main",
             ),
             onPluginLoaded = { name, version, className ->
                 kotlinx.coroutines.MainScope().launch {
