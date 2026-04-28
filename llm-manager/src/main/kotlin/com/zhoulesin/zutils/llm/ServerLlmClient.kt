@@ -7,6 +7,7 @@ import com.zhoulesin.zutils.engine.workflow.WorkflowResult
 import com.zhoulesin.zutils.engine.workflow.WorkflowStep
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -18,6 +19,21 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
+
+@Serializable
+data class FunctionSchema(
+    val name: String,
+    val description: String,
+    val parameters: List<ParamSchema> = emptyList(),
+)
+
+@Serializable
+data class ParamSchema(
+    val name: String,
+    val description: String = "",
+    val type: String = "STRING",
+    val required: Boolean = false,
+)
 
 class ServerLlmClient(
     private val serverBaseUrl: String,
@@ -34,7 +50,22 @@ class ServerLlmClient(
         userInput: String,
         availableFunctions: List<FunctionInfo>,
     ): Workflow {
-        val bodyJson = """{"input":${jsonEscape(userInput)}}"""
+        val schemas = availableFunctions.map { fn ->
+            FunctionSchema(
+                name = fn.name,
+                description = fn.description,
+                parameters = fn.parameters.map { p ->
+                    ParamSchema(
+                        name = p.name,
+                        description = p.description,
+                        type = p.type.name,
+                        required = p.required,
+                    )
+                }
+            )
+        }
+        val schemasJson = json.encodeToString(schemas)
+        val bodyJson = """{"input":${jsonEscape(userInput)},"functions":$schemasJson}"""
         return try {
             val response = post("$serverBaseUrl/api/v1/llm/parse", bodyJson)
             val root = json.parseToJsonElement(response).jsonObject

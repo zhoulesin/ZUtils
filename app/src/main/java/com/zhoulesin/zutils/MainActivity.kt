@@ -91,7 +91,7 @@ class MainActivity : ComponentActivity() {
                 }
             },
         ).also {
-            it.registry.register(CalculateFunction())
+            // it.registry.register(CalculateFunction())  // 使用云端插件测试
             it.registry.register(GetCurrentTimeFunction())
             it.registry.register(GetBatteryLevelFunction())
             it.registry.register(SetScreenBrightnessFunction())
