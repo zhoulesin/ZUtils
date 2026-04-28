@@ -36,7 +36,7 @@ import com.zhoulesin.zutils.engine.core.*
 import com.zhoulesin.zutils.engine.functions.*
 import com.zhoulesin.zutils.functions.calculate.CalculateFunction
 import com.zhoulesin.zutils.functions.time.GetCurrentTimeFunction
-import com.zhoulesin.zutils.functions.uuid.UuidFunction
+// import com.zhoulesin.zutils.functions.uuid.UuidFunction
 import com.zhoulesin.zutils.engine.llm.LlmClient
 import com.zhoulesin.zutils.llm.ServerLlmClient
 import com.zhoulesin.zutils.engine.workflow.Workflow
@@ -97,7 +97,7 @@ class MainActivity : ComponentActivity() {
             it.registry.register(SetScreenBrightnessFunction())
             it.registry.register(GetDeviceInfoFunction())
             it.registry.register(ToastFunction())
-            it.registry.register(UuidFunction())
+            // it.registry.register(UuidFunction())  // 使用云端插件
             it.registry.register(Base64Function())
             it.registry.register(GetVolumeFunction())
             it.registry.register(SetVolumeFunction())
