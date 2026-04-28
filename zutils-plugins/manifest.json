@@ -22,14 +22,6 @@
       "dexUrl" : "plugins/lib_zxing_v3.5.3.dex"
     } ]
   }, {
-    "functionName" : "uuid",
-    "description" : "",
-    "version" : "1.0.0",
-    "dexUrl" : "dex/plugin_uuid_v1.0.0.dex",
-    "className" : "com.zutils.generated.uuidFunction",
-    "parameters" : [ ],
-    "dependencies" : [ ]
-  }, {
     "functionName" : "greet",
     "description" : "",
     "version" : "1.0.0",
