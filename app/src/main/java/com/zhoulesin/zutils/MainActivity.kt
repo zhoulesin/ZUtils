@@ -26,9 +26,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
-import com.zhoulesin.zutils.data.PluginInfo
-import com.zhoulesin.zutils.data.CataloguePlugin
-import com.zhoulesin.zutils.data.PluginStorage
 import com.zhoulesin.zutils.data.InstalledPluginEntity
 import com.zhoulesin.zutils.data.PluginInstallRepo
 import com.zhoulesin.zutils.data.SavedWorkflow
@@ -45,7 +42,8 @@ import com.zhoulesin.zutils.engine.workflow.Workflow
 import com.zhoulesin.zutils.engine.workflow.WorkflowResult
 import com.zhoulesin.zutils.engine.workflow.WorkflowStep
 import com.zhoulesin.zutils.plugin.DefaultDexLoader
-import com.zhoulesin.zutils.ui.screen.PluginsScreen
+import com.zhoulesin.zutils.ui.screen.CapabilitiesScreen
+import com.zhoulesin.zutils.ui.screen.AutomationRulesScreen
 import com.zhoulesin.zutils.ui.screen.WorkflowBuilderScreen
 import com.zhoulesin.zutils.config.ServerConfig
 import kotlinx.serialization.json.buildJsonObject
@@ -147,9 +145,11 @@ private fun MainScreen(engine: Engine) {
     val scope = rememberCoroutineScope()
     var showBuilder by remember { mutableStateOf(false) }
     val storage = remember { WorkflowStorage(engine.androidContext) }
-    val pluginStorage = remember { PluginStorage(engine.androidContext) }
     val serverBaseUrl = com.zhoulesin.zutils.config.ServerConfig.DEFAULT_BASE_URL
     val llmClient = remember { ServerLlmClient(serverBaseUrl) }
+    val db = remember { com.zhoulesin.zutils.data.DatabaseProvider.get(engine.androidContext) }
+    val autoDao = remember { db.automationRuleDao() }
+    val autoEngine = remember { com.zhoulesin.zutils.engine.AutomationEngine(engine.androidContext, autoDao) }
 
     if (showBuilder) {
         WorkflowBuilderScreen(
@@ -187,50 +187,37 @@ private fun MainScreen(engine: Engine) {
                     label = { Text("执行") },
                 )
                 NavigationBarItem(
-                    selected = tab == Tab.PLUGINS,
-                    onClick = { tab = Tab.PLUGINS },
+                    selected = tab == Tab.CAPABILITIES,
+                    onClick = { tab = Tab.CAPABILITIES },
                     icon = { Text("🧩") },
-                    label = { Text("插件") },
+                    label = { Text("能力") },
+                )
+                NavigationBarItem(
+                    selected = tab == Tab.AUTOMATION,
+                    onClick = { tab = Tab.AUTOMATION },
+                    icon = { Text("⚡") },
+                    label = { Text("自动化") },
                 )
             }
         }
     ) { padding ->
         when (tab) {
-            Tab.EXECUTE -> ExecuteScreen(engine, history, llmClient, Modifier.padding(padding)            )
-            Tab.PLUGINS -> PluginsScreen(
-                installed = pluginStorage.loadAll(),
-                catalogue = emptyList<CataloguePlugin>(),
-                storage = pluginStorage,
-                onInstall = { plugin ->
-                    val info = PluginInfo(
-                        id = plugin.id, name = plugin.name, description = plugin.description,
-                        icon = plugin.icon, version = plugin.version, author = plugin.author,
-                        category = plugin.category, stepsJson = plugin.stepsJson,
-                    )
-                    pluginStorage.save(info)
-                    tab = Tab.PLUGINS
-                },
-                onUninstall = { plugin ->
-                    pluginStorage.delete(plugin.id)
-                    tab = Tab.PLUGINS
-                },
-                onExecute = { plugin ->
-                    val steps = Json.decodeFromString<List<WorkflowStep>>(plugin.stepsJson)
-                    val workflow = Workflow(steps = steps, summary = plugin.name)
-                    scope.launch {
-                        val result = runQueryRaw(engine, workflow)
-                        history.add(0, HistoryEntry(plugin.name, EntryType.WORKFLOW, result = result))
-                        tab = Tab.EXECUTE
-                    }
-                },
-                onNewWorkflow = { showBuilder = true },
+            Tab.EXECUTE -> ExecuteScreen(engine, history, llmClient, Modifier.padding(padding))
+            Tab.CAPABILITIES -> CapabilitiesScreen(
+                builtinFunctions = engine.registry.getAllInfos(),
+                dexPluginInfos = engine.dexLoader?.getAllPluginInfos() ?: emptyList(),
+                serverBaseUrl = serverBaseUrl,
+                modifier = Modifier.padding(padding),
+            )
+            Tab.AUTOMATION -> AutomationRulesScreen(
+                autoEngine = autoEngine,
                 modifier = Modifier.padding(padding),
             )
         }
     }
 }
 
-private enum class Tab { EXECUTE, PLUGINS }
+private enum class Tab { EXECUTE, CAPABILITIES, AUTOMATION }
 
 @Composable
 private fun ExecuteScreen(
