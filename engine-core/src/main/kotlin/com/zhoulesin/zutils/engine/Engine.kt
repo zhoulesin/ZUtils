@@ -115,7 +115,7 @@ class Engine(
     suspend fun getAllAvailableInfos(): List<FunctionInfo> {
         val builtIn = registry.getAllInfos()
         val builtInNames = builtIn.map { it.name }.toSet()
-        val pluginInfos = dexLoader?.getAllPluginInfos() ?: emptyList()
+        val pluginInfos = try { dexLoader?.getAllPluginInfos() ?: emptyList() } catch (_: Exception) { emptyList() }
         val result = builtIn + pluginInfos.filter { it.name !in builtInNames }
         Log.i("ZUtils-DEX", "Available functions: ${result.size} total (${builtIn.size} built-in + ${pluginInfos.size} plugin)")
         for (fn in result) {
