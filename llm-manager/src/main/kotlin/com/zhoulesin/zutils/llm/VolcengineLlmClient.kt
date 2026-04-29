@@ -146,15 +146,15 @@ class VolcengineLlmClient(
         val body = buildJsonObject {
             put("model", model)
             putJsonArray("messages") {
-                putJsonObject {
+                add(buildJsonObject {
                     put("role", "system")
                     put("content", "你是 ZUtils 手机助手。你可以调用工具来完成任务，一次只调一个。任务完成后用中文总结回复用户。工具结果会以用户消息形式告诉你。news_headlines 返回英文，如需中文再调 translate_text。")
-                }
+                })
                 for (msg in messages) {
-                    putJsonObject {
+                    add(buildJsonObject {
                         put("role", msg.role)
                         put("content", msg.content)
-                    }
+                    })
                 }
             }
             put("tools", JsonArray(tools))
