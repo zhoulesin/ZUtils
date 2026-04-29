@@ -420,8 +420,12 @@ private suspend fun runQueryRaw(engine: Engine, workflow: Workflow): ResultConte
 }
 
 private suspend fun runQuery(engine: Engine, query: String, llmClient: LlmClient?): ResultContent {
-    Log.i("ZUtils-LLM", "=== Agent 开始 ===")
-    Log.i("ZUtils-LLM", "输入: \"$query\"")
+    val logs = StringBuilder()
+    logs.appendLine("🤖 Agent 执行记录")
+    logs.appendLine("━━━━━━━━━━━━━━━━")
+    fun log(msg: String) { logs.appendLine(msg); Log.i("ZUtils-LLM", msg) }
+
+    log("📥 输入: \"$query\"")
 
     if (llmClient == null) {
         return runQueryRaw(engine, parseQuery(query))
@@ -434,30 +438,40 @@ private suspend fun runQuery(engine: Engine, query: String, llmClient: LlmClient
         .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
         .build()
 
+    var turn = 0
     var maxTurns = 10
     while (maxTurns-- > 0) {
-        Log.i("ZUtils-LLM", "→ Agent 思考... (剩余 $maxTurns 轮)")
+        turn++
+        log("")
+        log("── 第 ${turn} 轮 ──")
+        log("💭 思考中...")
         val result = llmClient.chat(messages, engine.getAllAvailableInfos())
 
         when (result) {
             is ChatResult.ToolCall -> {
-                Log.i("ZUtils-LLM", "  调用工具: ${result.function} args=${result.args}")
-                val output = executeMcpCall(httpClient, json, result.function, result.args)
-                Log.i("ZUtils-LLM", "  工具结果: $output")
+                val fn = result.function
+                val argsStr = result.args.toString()
+                log("🔧 调用: $fn")
+                if (argsStr.length < 100) log("   参数: $argsStr")
+                val output = executeMcpCall(httpClient, json, fn, result.args)
+                log("✅ 结果: ${output.take(150)}${if (output.length > 150) "…" else ""}")
                 messages.add(ChatMessage(role = "user",
-                    content = "${result.function} 的返回结果：$output\n\n根据结果决定下一步，如果任务完成请总结回复用户。"))
+                    content = "$fn 的返回结果：$output\n\n根据结果决定下一步，如果任务完成请总结回复用户。"))
             }
             is ChatResult.FinalAnswer -> {
-                Log.i("ZUtils-LLM", "✓ 最终答案: ${result.text}")
-                return ResultContent.Text(result.text)
+                log("💬 ${result.text}")
+                logs.appendLine("━━━━━━━━━━━━━━━━")
+                logs.append("✅ 最终回答:\n${result.text}")
+                return ResultContent.Text(logs.toString())
             }
             is ChatResult.Error -> {
-                Log.w("ZUtils-LLM", "⚠️ Agent 错误: ${result.message}")
+                log("⚠️ Agent 错误: ${result.message}")
                 return runQueryRaw(engine, parseQuery(query))
             }
         }
     }
-    return ResultContent.Text("任务执行超时，请重试")
+    logs.appendLine("⏰ 执行超时")
+    return ResultContent.Text(logs.toString())
 }
 
 private suspend fun executeMcpCall(
