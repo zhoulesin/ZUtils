@@ -18,6 +18,19 @@ data class PluginInfo(
     val stepsJson: String,
 )
 
+@Serializable
+data class CataloguePlugin(
+    val id: String,
+    val name: String,
+    val description: String,
+    val icon: String,
+    val category: String,
+    val version: String,
+    val author: String,
+    val downloads: Int = 0,
+    val stepsJson: String,
+)
+
 class PluginStorage(context: Context) {
     private val dir = File(context.filesDir, "plugins").also { it.mkdirs() }
     private val json = Json { prettyPrint = true }

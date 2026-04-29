@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import com.zhoulesin.zutils.data.PluginInfo
+import com.zhoulesin.zutils.data.CataloguePlugin
 import com.zhoulesin.zutils.data.PluginStorage
 import com.zhoulesin.zutils.data.InstalledPluginEntity
 import com.zhoulesin.zutils.data.PluginInstallRepo
@@ -50,6 +51,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlin.collections.emptyList
 
 sealed class ResultContent {
     data class Text(val content: String) : ResultContent()
@@ -187,7 +189,7 @@ private fun MainScreen(engine: Engine) {
             Tab.EXECUTE -> ExecuteScreen(engine, history, llmClient, Modifier.padding(padding)            )
             Tab.PLUGINS -> PluginsScreen(
                 installed = pluginStorage.loadAll(),
-                catalogue = emptyList(),
+                catalogue = emptyList<CataloguePlugin>(),
                 storage = pluginStorage,
                 onInstall = { plugin ->
                     val info = PluginInfo(
