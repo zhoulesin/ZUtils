@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit
 class AutomationEngine(
     private val context: Context,
     private val dao: AutomationRuleDao,
-    private val serverBaseUrl: String = "http://10.0.2.2:8080",
+    private val serverBaseUrl: String = com.zhoulesin.zutils.config.ServerConfig.DEFAULT_BASE_URL,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 

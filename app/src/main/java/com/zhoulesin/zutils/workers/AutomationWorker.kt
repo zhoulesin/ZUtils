@@ -3,6 +3,7 @@ package com.zhoulesin.zutils.workers
 import android.content.Context
 import android.util.Log
 import androidx.work.*
+import com.zhoulesin.zutils.config.ServerConfig
 import com.zhoulesin.zutils.data.DatabaseProvider
 import com.zhoulesin.zutils.engine.Engine
 import com.zhoulesin.zutils.engine.workflow.Workflow
@@ -28,7 +29,7 @@ class AutomationWorker(
     override suspend fun doWork(): Result {
         val ruleId = inputData.getString("rule_id") ?: return Result.failure()
         val stepsJson = inputData.getString("steps_json") ?: return Result.failure()
-        val serverUrl = inputData.getString("server_url") ?: "http://10.0.2.2:8080"
+        val serverUrl = inputData.getString("server_url") ?: ServerConfig.DEFAULT_BASE_URL
         Log.i("ZUtils-Auto", "Automation triggered: rule=$ruleId")
 
         return try {
@@ -94,7 +95,7 @@ class AutomationWorker(
         if (!rule.isEnabled) return
         val (hour, minute) = parseCron(rule.cron)
         val delay = calcDelay(hour, minute)
-        val serverUrl = inputData.getString("server_url") ?: "http://10.0.2.2:8080"
+        val serverUrl = inputData.getString("server_url") ?: ServerConfig.DEFAULT_BASE_URL
         val request = OneTimeWorkRequestBuilder<AutomationWorker>()
             .setInitialDelay(delay, TimeUnit.MILLISECONDS)
             .addTag("automation_${ruleId}")

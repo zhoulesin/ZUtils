@@ -137,8 +137,7 @@ private fun MainScreen(engine: Engine) {
     var showBuilder by remember { mutableStateOf(false) }
     val storage = remember { WorkflowStorage(engine.androidContext) }
     val pluginStorage = remember { PluginStorage(engine.androidContext) }
-//    val serverBaseUrl = "http://10.0.2.2:8080"
-    val serverBaseUrl = "http://10.0.2.2:8080"
+    val serverBaseUrl = com.zhoulesin.zutils.config.ServerConfig.DEFAULT_BASE_URL
     val llmClient = remember { ServerLlmClient(serverBaseUrl) }
 
     if (showBuilder) {
