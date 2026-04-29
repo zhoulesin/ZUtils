@@ -37,7 +37,7 @@ fun AutomationRulesScreen(
 
         if (rules.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("还没有自动化规则\n对助手说"每天8点…"来创建", style = MaterialTheme.typography.bodyMedium,
+                Text("还没有自动化规则\n对助手说\"每天8点…\"来创建", style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         } else {

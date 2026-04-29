@@ -13,6 +13,7 @@ import com.zhoulesin.zutils.engine.core.FunctionInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -138,7 +139,8 @@ fun CapabilitiesScreen(
                 items(filteredBuiltin, key = { "fn_${it.name}" }) { fn ->
                     val cat = FUNCTION_CATEGORIES[fn.name]
                     FunctionCard(icon = FUNCTION_ICONS[fn.name] ?: "⚡", name = fn.name,
-                        desc = fn.description, badge = cat ?: "本地")
+                        desc = fn.description, badge = cat ?: "本地",
+                        badgeColor = MaterialTheme.colorScheme.secondary)
                 }
             }
 
