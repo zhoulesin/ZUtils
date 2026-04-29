@@ -117,8 +117,6 @@ class Engine(
         val builtInNames = builtIn.map { it.name }.toSet()
         val pluginInfos = dexLoader?.getAllPluginInfos() ?: emptyList()
         val result = builtIn + pluginInfos.filter { it.name !in builtInNames }
-            // 已迁移到 MCP Tool 的旧函数名，防止与云端冲突
-            .filterNot { it.name in setOf("generateQRCode") }
         Log.i("ZUtils-DEX", "Available functions: ${result.size} total (${builtIn.size} built-in + ${pluginInfos.size} plugin)")
         for (fn in result) {
             val req = fn.parameters.filter { it.required }.map { it.name }

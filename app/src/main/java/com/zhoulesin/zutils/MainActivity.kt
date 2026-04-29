@@ -110,6 +110,7 @@ class MainActivity : ComponentActivity() {
             it.registry.register(GetNetworkTypeFunction())
             it.registry.register(com.zhoulesin.zutils.engine.functions.SendNotificationFunction())
             it.registry.register(com.zhoulesin.zutils.engine.functions.CreateAutomationFunction(autoEngine))
+            it.registry.unregister("generateQRCode")
         }
 
         // Reschedule all enabled automation rules on startup
