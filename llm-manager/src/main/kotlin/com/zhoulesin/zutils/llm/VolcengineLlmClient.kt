@@ -6,6 +6,8 @@ import com.zhoulesin.zutils.engine.core.MediaType
 import com.zhoulesin.zutils.engine.core.OutputType
 import com.zhoulesin.zutils.engine.core.Parameter
 import com.zhoulesin.zutils.engine.core.ParameterType
+import com.zhoulesin.zutils.engine.llm.ChatMessage
+import com.zhoulesin.zutils.engine.llm.ChatResult
 import com.zhoulesin.zutils.engine.llm.LlmClient
 import com.zhoulesin.zutils.engine.workflow.Workflow
 import com.zhoulesin.zutils.engine.workflow.WorkflowResult
@@ -134,6 +136,44 @@ class VolcengineLlmClient(
         }
 
         return Workflow(steps = steps, summary = userInput)
+    }
+
+    override suspend fun chat(
+        messages: List<ChatMessage>,
+        availableFunctions: List<FunctionInfo>,
+    ): ChatResult {
+        val tools = availableFunctions.map { it.toToolSchema() }
+        val body = buildJsonObject {
+            put("model", model)
+            putJsonArray("messages") {
+                putJsonObject {
+                    put("role", "system")
+                    put("content", "你是 ZUtils 手机助手。你可以调用工具来完成任务，一次只调一个。任务完成后用中文总结回复用户。工具结果会以用户消息形式告诉你。news_headlines 返回英文，如需中文再调 translate_text。")
+                }
+                for (msg in messages) {
+                    putJsonObject {
+                        put("role", msg.role)
+                        put("content", msg.content)
+                    }
+                }
+            }
+            put("tools", JsonArray(tools))
+            put("temperature", 0.1)
+        }
+        return try {
+            val response = post(body.toString())
+            val chatResp = json.decodeFromString<ChatResponse>(response)
+            val message = chatResp.choices.firstOrNull()?.message ?: return ChatResult.Error("no response")
+            val tc = message.tool_calls?.firstOrNull()
+            if (tc != null) {
+                val args = try { json.decodeFromString<JsonObject>(tc.function.arguments) } catch (_: Exception) { JsonObject(emptyMap()) }
+                ChatResult.ToolCall(tc.function.name, args)
+            } else {
+                ChatResult.FinalAnswer(message.content ?: "")
+            }
+        } catch (e: Exception) {
+            ChatResult.Error(e.message ?: "unknown")
+        }
     }
 
     override suspend fun summarize(
