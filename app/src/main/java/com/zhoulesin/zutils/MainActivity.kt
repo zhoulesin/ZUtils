@@ -457,11 +457,22 @@ private suspend fun resolveMcpSteps(workflow: Workflow): Workflow = withContext(
         .build()
     val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
 
+    var lastMcpOutput: String? = null
     val resolvedSteps = workflow.steps.map { step ->
         if (step.type == "mcp" && step.result == null) {
+            // 如果上一步是 news_headlines 且当前是 translate_text，自动传入上一步结果
+            val mergedArgs = if (step.function == "translate_text" && lastMcpOutput != null) {
+                val text = step.args["text"]?.jsonPrimitive?.contentOrNull
+                if (text.isNullOrBlank() || text == "..." || text == "等待上一步结果") {
+                    val updated = step.args.toMap().toMutableMap()
+                    updated["text"] = kotlinx.serialization.json.JsonPrimitive(lastMcpOutput!!)
+                    kotlinx.serialization.json.JsonObject(updated)
+                } else step.args
+            } else step.args
+
             val bodyJson = buildJsonObject {
                 put("tool", step.function)
-                put("arguments", step.args)
+                put("arguments", mergedArgs)
             }
             val request = okhttp3.Request.Builder()
                 .url("$serverUrl/api/v1/mcp/call")
@@ -472,7 +483,8 @@ private suspend fun resolveMcpSteps(workflow: Workflow): Workflow = withContext(
             val root = json.parseToJsonElement(body).jsonObject
             val output = root["data"]?.jsonObject?.get("output")?.jsonPrimitive?.contentOrNull ?: ""
             Log.i("ZUtils-MCP", "${step.function} → $output")
-            step.copy(result = output)
+            lastMcpOutput = output
+            step.copy(result = output, args = mergedArgs)
         } else {
             step
         }
