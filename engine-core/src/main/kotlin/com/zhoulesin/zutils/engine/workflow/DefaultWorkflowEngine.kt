@@ -11,6 +11,15 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlin.system.measureTimeMillis
 
+/**
+ * WorkflowEngine 的默认实现。
+ *
+ * 逐个执行 Workflow.steps，处理三种执行类型：
+ * - mcp：直接使用服务器预填充的 result，跳过本地调用
+ * - local/tool：查 FunctionRegistry → 权限检查 → 执行 → 记录结果
+ *
+ * 步骤间通过 pipeline 机制传递数据。任意步骤失败（FUNCTION_NOT_FOUND / 权限不足 / 执行异常）则中断。
+ */
 class DefaultWorkflowEngine : WorkflowEngine {
 
     override suspend fun execute(
@@ -25,6 +34,7 @@ class DefaultWorkflowEngine : WorkflowEngine {
         for ((index, step) in workflow.steps.withIndex()) {
             if (context.cancelled) break
 
+            // type=mcp：服务器已执行，直接使用预填充的 result
             if (step.type == "mcp") {
                 val resultText = step.result ?: ""
                 val stepResult = ZResult.ok(resultText)
@@ -42,6 +52,7 @@ class DefaultWorkflowEngine : WorkflowEngine {
                 continue
             }
 
+            // 查 FunctionRegistry
             val function = context.registry.get(step.function)
             if (function == null) {
                 stepResults.add(
@@ -58,6 +69,7 @@ class DefaultWorkflowEngine : WorkflowEngine {
                 break
             }
 
+            // 检查 Android 权限
             val permCheck = permissionChecker.check(function.info.permissions)
             if (permCheck !is PermissionCheck.OK) {
                 val msg = when (permCheck) {
@@ -76,6 +88,7 @@ class DefaultWorkflowEngine : WorkflowEngine {
                 break
             }
 
+            // pipeline：将上一步的输出注入当前步骤的入参
             val mergedArgs = if (step.pipeline.isNotEmpty()) {
                 val pipelineValues = PipelineResolver.resolve(step.pipeline, pipelineResults)
                 JsonObject(step.args + pipelineValues)
@@ -83,6 +96,7 @@ class DefaultWorkflowEngine : WorkflowEngine {
                 step.args
             }
 
+            // 执行函数
             var stepResult: ZResult
             val duration = measureTimeMillis {
                 stepResult = try {
@@ -103,10 +117,12 @@ class DefaultWorkflowEngine : WorkflowEngine {
                 )
             )
 
+            // 成功则记入 pipelineResults，供后续步骤引用
             if (stepResult is ZResult.Success) {
                 pipelineResults[index] = stepResult.data
             }
 
+            // 失败则中断
             if (stepResult is ZResult.Error) {
                 allSucceeded = false
                 break
