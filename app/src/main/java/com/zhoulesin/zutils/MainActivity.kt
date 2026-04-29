@@ -392,9 +392,14 @@ private fun ExecuteScreen(
                     if (query.isNotEmpty()) {
                         input = ""
                         isLoading = true
+                        history.add(0, HistoryEntry(query, EntryType.TEXT,
+                            result = ResultContent.Text("🤖 Agent 启动中…")))
                         scope.launch {
-                            val result = runQuery(engine, query, llmClient)
-                            history.add(0, HistoryEntry(query, EntryType.TEXT, result = result))
+                            val idx = 0
+                            val result = runQuery(engine, query, llmClient) { text ->
+                                history[idx] = history[idx].copy(result = ResultContent.Text(text))
+                            }
+                            history[idx] = history[idx].copy(result = result)
                             isLoading = false
                         }
                     }
@@ -419,13 +424,19 @@ private suspend fun runQueryRaw(engine: Engine, workflow: Workflow): ResultConte
     return formatResult(result)
 }
 
-private suspend fun runQuery(engine: Engine, query: String, llmClient: LlmClient?): ResultContent {
+private suspend fun runQuery(
+    engine: Engine, query: String, llmClient: LlmClient?,
+    onProgress: ((String) -> Unit)? = null,
+): ResultContent {
     val logs = StringBuilder()
     logs.appendLine("🤖 Agent 执行记录")
     logs.appendLine("━━━━━━━━━━━━━━━━")
-    fun log(msg: String) { logs.appendLine(msg); Log.i("ZUtils-LLM", msg) }
+    fun push(msg: String) {
+        logs.appendLine(msg); Log.i("ZUtils-LLM", msg)
+        onProgress?.invoke(logs.toString())
+    }
 
-    log("📥 输入: \"$query\"")
+    push("📥 输入: \"$query\"")
 
     if (llmClient == null) {
         return runQueryRaw(engine, parseQuery(query))
@@ -442,35 +453,35 @@ private suspend fun runQuery(engine: Engine, query: String, llmClient: LlmClient
     var maxTurns = 10
     while (maxTurns-- > 0) {
         turn++
-        log("")
-        log("── 第 ${turn} 轮 ──")
-        log("💭 思考中...")
+        push("")
+        push("── 第 ${turn} 轮 ──")
+        push("💭 思考中...")
         val result = llmClient.chat(messages, engine.getAllAvailableInfos())
 
         when (result) {
             is ChatResult.ToolCall -> {
                 val fn = result.function
                 val argsStr = result.args.toString()
-                log("🔧 调用: $fn")
-                if (argsStr.length < 100) log("   参数: $argsStr")
+                push("🔧 调用: $fn")
+                if (argsStr.length < 100) push("   参数: $argsStr")
                 val output = executeMcpCall(httpClient, json, fn, result.args)
-                log("✅ 结果: ${output.take(150)}${if (output.length > 150) "…" else ""}")
+                push("✅ 结果: ${output.take(150)}${if (output.length > 150) "…" else ""}")
                 messages.add(ChatMessage(role = "user",
                     content = "$fn 的返回结果：$output\n\n根据结果决定下一步，如果任务完成请总结回复用户。"))
             }
             is ChatResult.FinalAnswer -> {
-                log("💬 ${result.text}")
+                push("💬 ${result.text}")
                 logs.appendLine("━━━━━━━━━━━━━━━━")
                 logs.append("✅ 最终回答:\n${result.text}")
                 return ResultContent.Text(logs.toString())
             }
             is ChatResult.Error -> {
-                log("⚠️ Agent 错误: ${result.message}")
+                push("⚠️ Agent 错误: ${result.message}")
                 return runQueryRaw(engine, parseQuery(query))
             }
         }
     }
-    logs.appendLine("⏰ 执行超时")
+    push("⏰ 执行超时")
     return ResultContent.Text(logs.toString())
 }
 
