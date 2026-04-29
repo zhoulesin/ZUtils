@@ -7,6 +7,8 @@ import android.os.Bundle
 import android.provider.Settings
 import android.util.Base64
 import android.util.Log
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -34,9 +36,7 @@ import com.zhoulesin.zutils.data.WorkflowStorage
 import com.zhoulesin.zutils.engine.Engine
 import com.zhoulesin.zutils.engine.core.*
 import com.zhoulesin.zutils.engine.functions.*
-import com.zhoulesin.zutils.functions.calculate.CalculateFunction
 import com.zhoulesin.zutils.functions.time.GetCurrentTimeFunction
-// import com.zhoulesin.zutils.functions.uuid.UuidFunction
 import com.zhoulesin.zutils.engine.llm.LlmClient
 import com.zhoulesin.zutils.llm.ServerLlmClient
 import com.zhoulesin.zutils.engine.workflow.Workflow
@@ -45,6 +45,11 @@ import com.zhoulesin.zutils.engine.workflow.WorkflowStep
 import com.zhoulesin.zutils.plugin.DefaultDexLoader
 import com.zhoulesin.zutils.ui.screen.PluginsScreen
 import com.zhoulesin.zutils.ui.screen.WorkflowBuilderScreen
+import com.zhoulesin.zutils.config.ServerConfig
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import com.zhoulesin.zutils.ui.theme.ZUtilsTheme
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
@@ -108,9 +113,8 @@ class MainActivity : ComponentActivity() {
             it.registry.register(GetScreenInfoFunction())
             it.registry.register(GetStorageInfoFunction())
             it.registry.register(GetNetworkTypeFunction())
-            it.registry.register(com.zhoulesin.zutils.engine.functions.SendNotificationFunction())
-            it.registry.register(com.zhoulesin.zutils.engine.functions.CreateAutomationFunction(autoEngine))
-            it.registry.unregister("generateQRCode")
+            it.registry.register(SendNotificationFunction())
+            it.registry.register(CreateAutomationFunction(autoEngine))
         }
 
         // Reschedule all enabled automation rules on startup
@@ -433,8 +437,44 @@ private suspend fun runQuery(engine: Engine, query: String, llmClient: LlmClient
         parseQuery(query)
     }
 
+    // MCP 步骤由 Android 统一通过 HTTP 调用服务器执行
+    val resolved = resolveMcpSteps(workflow)
     Log.i("ZUtils-LLM", "=== 执行结束 ===")
-    return runQueryRaw(engine, workflow)
+    return runQueryRaw(engine, resolved)
+}
+
+private suspend fun resolveMcpSteps(workflow: Workflow): Workflow {
+    val hasMcp = workflow.steps.any { it.type == "mcp" && it.result == null }
+    if (!hasMcp) return workflow
+
+    val serverUrl = ServerConfig.DEFAULT_BASE_URL
+    val client = okhttp3.OkHttpClient.Builder()
+        .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+        .build()
+    val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+
+    val resolvedSteps = workflow.steps.map { step ->
+        if (step.type == "mcp" && step.result == null) {
+            val bodyJson = buildJsonObject {
+                put("tool", step.function)
+                put("arguments", step.args)
+            }
+            val request = okhttp3.Request.Builder()
+                .url("$serverUrl/api/v1/mcp/call")
+                .post(bodyJson.toString().toRequestBody("application/json".toMediaType()))
+                .build()
+            val response = client.newCall(request).execute()
+            val body = response.body?.string() ?: ""
+            val root = json.parseToJsonElement(body).jsonObject
+            val output = root["data"]?.jsonObject?.get("output")?.jsonPrimitive?.contentOrNull ?: ""
+            Log.i("ZUtils-MCP", "${step.function} → $output")
+            step.copy(result = output)
+        } else {
+            step
+        }
+    }
+    return Workflow(resolvedSteps, workflow.summary)
 }
 
 private fun parseQuery(query: String): Workflow {

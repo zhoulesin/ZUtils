@@ -36,26 +36,23 @@ class DefaultWorkflowEngine : WorkflowEngine {
         for ((index, step) in workflow.steps.withIndex()) {
             if (context.cancelled) break
 
-            // type=mcp：服务器已执行，直接使用预填充的 result
+            // type=mcp：Android 统一通过 HTTP 执行，结果已填入 step.result
             if (step.type == "mcp") {
-                val resultText = step.result ?: ""
+                val resultText = step.result
+                if (resultText == null) {
+                    stepResults.add(StepResult(stepId = index, function = step.function,
+                        result = ZResult.fail("MCP 步骤未执行: ${step.function}", "MCP_NOT_EXECUTED")))
+                    allSucceeded = false; break
+                }
                 val mediaType = if (resultText.startsWith("data:image/"))
                     MediaType.IMAGE_PNG else MediaType.TEXT
                 val dataValue = if (mediaType == MediaType.IMAGE_PNG)
                     buildJsonObject { put("dataUri", JsonPrimitive(resultText)) }
                 else JsonPrimitive(resultText)
                 val stepResult = ZResult.Success(dataValue, mediaType)
-                stepResults.add(
-                    StepResult(
-                        stepId = index,
-                        function = step.function,
-                        result = stepResult,
-                        durationMs = 0,
-                    )
-                )
-                if (stepResult is ZResult.Success) {
-                    pipelineResults[index] = stepResult.data
-                }
+                stepResults.add(StepResult(stepId = index, function = step.function,
+                    result = stepResult, durationMs = 0))
+                if (stepResult is ZResult.Success) pipelineResults[index] = stepResult.data
                 continue
             }
 
