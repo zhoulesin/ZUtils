@@ -51,11 +51,14 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import com.zhoulesin.zutils.ui.theme.ZUtilsTheme
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlin.collections.emptyList
 
 sealed class ResultContent {
@@ -443,9 +446,9 @@ private suspend fun runQuery(engine: Engine, query: String, llmClient: LlmClient
     return runQueryRaw(engine, resolved)
 }
 
-private suspend fun resolveMcpSteps(workflow: Workflow): Workflow {
+private suspend fun resolveMcpSteps(workflow: Workflow): Workflow = withContext(Dispatchers.IO) {
     val hasMcp = workflow.steps.any { it.type == "mcp" && it.result == null }
-    if (!hasMcp) return workflow
+    if (!hasMcp) return@withContext workflow
 
     val serverUrl = ServerConfig.DEFAULT_BASE_URL
     val client = okhttp3.OkHttpClient.Builder()
@@ -474,7 +477,7 @@ private suspend fun resolveMcpSteps(workflow: Workflow): Workflow {
             step
         }
     }
-    return Workflow(resolvedSteps, workflow.summary)
+    Workflow(resolvedSteps, workflow.summary)
 }
 
 private fun parseQuery(query: String): Workflow {
