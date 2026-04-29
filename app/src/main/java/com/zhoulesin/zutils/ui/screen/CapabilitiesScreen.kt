@@ -107,56 +107,51 @@ fun CapabilitiesScreen(
 
         Spacer(Modifier.height(8.dp))
 
+        val f = filter.lowercase()
+        val filteredMcp by remember(mcpTools, f) { derivedStateOf {
+            mcpTools.filter { it.name.contains(f) || it.description.contains(f) }
+        }}
+        val filteredDex by remember(dexPluginInfos, f) { derivedStateOf {
+            dexPluginInfos.filter { it.name.contains(f) || it.description.contains(f) }
+        }}
+        val filteredBuiltin by remember(builtinFunctions, f) { derivedStateOf {
+            builtinFunctions.filter { it.name.contains(f) || it.description.contains(f) }
+        }}
+        val filteredSkill by remember(f) { derivedStateOf {
+            SKILLS.filter { it.name.contains(f) || it.description.contains(f) }
+        }}
+
         LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            // MCP 工具
-            val filteredMcp = mcpTools.filter { it.name.contains(filter, true) || it.description.contains(filter, true) }
             if (filteredMcp.isNotEmpty()) {
-                item { SectionHeader("MCP 工具", filteredMcp.size) }
+                item(key = "h_mcp") { SectionHeader("MCP 工具", filteredMcp.size) }
                 items(filteredMcp, key = { "mcp_${it.name}" }) { tool ->
                     FunctionCard(icon = MCP_ICONS[tool.name] ?: "🔌", name = tool.name,
                         desc = tool.description, badge = "MCP", badgeColor = MaterialTheme.colorScheme.primary)
                 }
             }
-
-            // DEX 插件
-            val filteredDex = dexPluginInfos.filter {
-                it.name.contains(filter, true) || it.description.contains(filter, true)
-            }
             if (filteredDex.isNotEmpty()) {
-                item { SectionHeader("DEX 插件", filteredDex.size) }
+                item(key = "h_dex") { SectionHeader("DEX 插件", filteredDex.size) }
                 items(filteredDex, key = { "dex_${it.name}" }) { fn ->
                     FunctionCard(icon = "📦", name = fn.name, desc = fn.description,
                         badge = "DEX", badgeColor = MaterialTheme.colorScheme.tertiary)
                 }
             }
-
-            // 内置函数
-            val filteredBuiltin = builtinFunctions.filter {
-                it.name.contains(filter, true) || it.description.contains(filter, true)
-            }
             if (filteredBuiltin.isNotEmpty()) {
-                item { SectionHeader("内置函数", filteredBuiltin.size) }
+                item(key = "h_builtin") { SectionHeader("内置函数", filteredBuiltin.size) }
                 items(filteredBuiltin, key = { "fn_${it.name}" }) { fn ->
-                    val cat = FUNCTION_CATEGORIES[fn.name]
                     FunctionCard(icon = FUNCTION_ICONS[fn.name] ?: "⚡", name = fn.name,
-                        desc = fn.description, badge = cat ?: "本地",
+                        desc = fn.description, badge = FUNCTION_CATEGORIES[fn.name] ?: "本地",
                         badgeColor = MaterialTheme.colorScheme.secondary)
                 }
             }
-
-            // Skill
-            val filteredSkill = SKILLS.filter {
-                it.name.contains(filter, true) || it.description.contains(filter, true)
-            }
             if (filteredSkill.isNotEmpty()) {
-                item { SectionHeader("Skill", filteredSkill.size) }
+                item(key = "h_skill") { SectionHeader("Skill", filteredSkill.size) }
                 items(filteredSkill, key = { "skill_${it.id}" }) { skill ->
                     SkillCard(skill)
                 }
             }
-
             if (filteredMcp.isEmpty() && filteredDex.isEmpty() && filteredBuiltin.isEmpty() && filteredSkill.isEmpty()) {
-                item {
+                item(key = "empty") {
                     Box(modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
                         contentAlignment = Alignment.Center) {
                         Text("没有匹配的结果", color = MaterialTheme.colorScheme.onSurfaceVariant)
