@@ -26,7 +26,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import com.zhoulesin.zutils.data.PluginInfo
 import com.zhoulesin.zutils.data.PluginStorage
-import com.zhoulesin.zutils.data.PluginCatalogue
 import com.zhoulesin.zutils.data.InstalledPluginEntity
 import com.zhoulesin.zutils.data.PluginInstallRepo
 import com.zhoulesin.zutils.data.SavedWorkflow
@@ -188,7 +187,7 @@ private fun MainScreen(engine: Engine) {
             Tab.EXECUTE -> ExecuteScreen(engine, history, llmClient, Modifier.padding(padding)            )
             Tab.PLUGINS -> PluginsScreen(
                 installed = pluginStorage.loadAll(),
-                catalogue = PluginCatalogue.plugins,
+                catalogue = emptyList(),
                 storage = pluginStorage,
                 onInstall = { plugin ->
                     val info = PluginInfo(

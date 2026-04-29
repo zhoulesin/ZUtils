@@ -57,27 +57,22 @@ data class DexManifest(
 
 class DefaultDexLoader(
     private val context: Context,
-    private val remoteBaseUrl: String? = null,
+    private val remoteBaseUrl: String,
 ) : DexLoader {
 
     private var specMap: Map<String, DexSpec>? = null
     private val mutex = Any()
 
     private suspend fun fetchManifestText(): String = withContext(Dispatchers.IO) {
-        if (remoteBaseUrl != null) {
-            URL("$remoteBaseUrl/manifest.json").readText()
-        } else {
-            context.assets.open("dex/dex_manifest.json").bufferedReader().readText()
-        }
+        URL("$remoteBaseUrl/manifest.json").readText()
     }
 
     private suspend fun ensureSpecsLoaded(): Map<String, DexSpec> {
         specMap?.let { return it }
-        val manifestUrl = if (remoteBaseUrl != null) "$remoteBaseUrl/manifest.json" else "assets://dex/dex_manifest.json"
         val json = try {
             fetchManifestText()
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to load manifest from $manifestUrl", e)
+            Log.e(TAG, "Failed to load manifest from $remoteBaseUrl/manifest.json", e)
             throw e
         }
         return synchronized(mutex) {
@@ -115,15 +110,10 @@ class DefaultDexLoader(
     override suspend fun resolve(functionName: String): DexSpec? = ensureSpecsLoaded()[functionName]
 
     private fun readBytes(path: String): ByteArray {
-        val url = if (remoteBaseUrl != null) "$remoteBaseUrl/$path" else "assets://$path"
         return try {
-            if (remoteBaseUrl != null) {
-                URL("$remoteBaseUrl/$path").openStream().readBytes()
-            } else {
-                context.assets.open(path).readBytes()
-            }
+            URL("$remoteBaseUrl/$path").openStream().readBytes()
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to read DEX from $url", e)
+            Log.e(TAG, "Failed to read DEX from $remoteBaseUrl/$path", e)
             throw e
         }
     }
