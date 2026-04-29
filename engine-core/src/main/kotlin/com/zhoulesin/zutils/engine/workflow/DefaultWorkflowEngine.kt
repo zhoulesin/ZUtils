@@ -1,6 +1,7 @@
 package com.zhoulesin.zutils.engine.workflow
 
 import com.zhoulesin.zutils.engine.core.ExecutionContext
+import com.zhoulesin.zutils.engine.core.MediaType
 import com.zhoulesin.zutils.engine.core.PermissionCheck
 import com.zhoulesin.zutils.engine.core.PermissionChecker
 import com.zhoulesin.zutils.engine.core.ZResult
@@ -9,6 +10,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import kotlin.system.measureTimeMillis
 
 /**
@@ -37,7 +39,12 @@ class DefaultWorkflowEngine : WorkflowEngine {
             // type=mcp：服务器已执行，直接使用预填充的 result
             if (step.type == "mcp") {
                 val resultText = step.result ?: ""
-                val stepResult = ZResult.ok(resultText)
+                val mediaType = if (resultText.startsWith("data:image/"))
+                    MediaType.IMAGE_PNG else MediaType.TEXT
+                val dataValue = if (mediaType == MediaType.IMAGE_PNG)
+                    buildJsonObject { put("dataUri", JsonPrimitive(resultText)) }
+                else JsonPrimitive(resultText)
+                val stepResult = ZResult.Success(dataValue, mediaType)
                 stepResults.add(
                     StepResult(
                         stepId = index,
