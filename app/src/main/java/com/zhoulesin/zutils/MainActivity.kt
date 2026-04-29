@@ -203,12 +203,18 @@ private fun MainScreen(engine: Engine) {
     ) { padding ->
         when (tab) {
             Tab.EXECUTE -> ExecuteScreen(engine, history, llmClient, Modifier.padding(padding))
-            Tab.CAPABILITIES -> CapabilitiesScreen(
-                builtinFunctions = engine.registry.getAllInfos(),
-                dexPluginInfos = engine.dexLoader?.getAllPluginInfos() ?: emptyList(),
-                serverBaseUrl = serverBaseUrl,
-                modifier = Modifier.padding(padding),
-            )
+            Tab.CAPABILITIES -> {
+                var dexInfos by remember { mutableStateOf(emptyList<com.zhoulesin.zutils.engine.core.FunctionInfo>()) }
+                LaunchedEffect(Unit) {
+                    dexInfos = engine.dexLoader?.getAllPluginInfos() ?: emptyList()
+                }
+                CapabilitiesScreen(
+                    builtinFunctions = engine.registry.getAllInfos(),
+                    dexPluginInfos = dexInfos,
+                    serverBaseUrl = serverBaseUrl,
+                    modifier = Modifier.padding(padding),
+                )
+            }
             Tab.AUTOMATION -> AutomationRulesScreen(
                 autoEngine = autoEngine,
                 modifier = Modifier.padding(padding),
