@@ -474,13 +474,7 @@ private fun parseQuery(query: String): Workflow {
                 .ifEmpty { "hello" }
             listOf(step("base64", "action" to if (isEncode) "encode" else "decode", "text" to text))
         }
-        q.contains("二维码") || q.contains("qrcode") || q.contains("qr") -> {
-            val content = q
-                .replace("二维码", "").replace("qrcode", "").replace("qr", "")
-                .trim().ifEmpty { "https://github.com/zhoulesin/ZUtils" }
-            val size = Regex("""(\d+)""").find(q)?.groupValues?.get(1)?.toIntOrNull() ?: 300
-            listOf(step("generateQRCode", "content" to content, "size" to size.toString()))
-        }
+
         q.contains("音量") || q.contains("volume") -> {
             val level = Regex("""(\d+)""").find(q)?.groupValues?.get(1)?.toIntOrNull()
             if (level != null) {

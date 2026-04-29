@@ -27,7 +27,7 @@ include(":app")
 include(":engine-core")
 include(":plugin-manager")
 include(":llm-manager")
-include(":functions:qrcode")
+// include(":functions:qrcode")  // migrated to server MCP tool: qrcode_generate
 include(":functions:calculate")
 include(":functions:uuid")
 include(":functions:time")
