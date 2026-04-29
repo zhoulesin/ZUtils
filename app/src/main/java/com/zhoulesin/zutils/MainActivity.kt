@@ -37,6 +37,8 @@ import com.zhoulesin.zutils.engine.Engine
 import com.zhoulesin.zutils.engine.core.*
 import com.zhoulesin.zutils.engine.functions.*
 import com.zhoulesin.zutils.functions.time.GetCurrentTimeFunction
+import com.zhoulesin.zutils.engine.llm.ChatMessage
+import com.zhoulesin.zutils.engine.llm.ChatResult
 import com.zhoulesin.zutils.engine.llm.LlmClient
 import com.zhoulesin.zutils.llm.ServerLlmClient
 import com.zhoulesin.zutils.engine.workflow.Workflow
@@ -418,78 +420,64 @@ private suspend fun runQueryRaw(engine: Engine, workflow: Workflow): ResultConte
 }
 
 private suspend fun runQuery(engine: Engine, query: String, llmClient: LlmClient?): ResultContent {
-    Log.i("ZUtils-LLM", "=== 执行开始 ===")
+    Log.i("ZUtils-LLM", "=== Agent 开始 ===")
     Log.i("ZUtils-LLM", "输入: \"$query\"")
-    Log.i("ZUtils-LLM", "LLM 客户端: ${if (llmClient != null) "已配置 (${llmClient::class.simpleName})" else "未配置，使用关键词匹配"}")
 
-    val workflow = if (llmClient != null) {
-        try {
-            Log.i("ZUtils-LLM", "→ 发送请求到 LLM...")
-            val wf = llmClient.parseIntent(query, engine.getAllAvailableInfos())
-            Log.i("ZUtils-LLM", "← LLM 返回: ${wf.steps.size} 个步骤")
-            for (step in wf.steps) {
-                Log.i("ZUtils-LLM", "   - ${step.function} args=${step.args}")
-            }
-            wf
-        } catch (e: Exception) {
-            Log.w("ZUtils-LLM", "⚠️ LLM 调用失败: ${e::class.simpleName}: ${e.message}")
-            Log.i("ZUtils-LLM", "→ 回退到关键词匹配")
-            parseQuery(query)
-        }
-    } else {
-        parseQuery(query)
+    if (llmClient == null) {
+        return runQueryRaw(engine, parseQuery(query))
     }
 
-    // MCP 步骤由 Android 统一通过 HTTP 调用服务器执行
-    val resolved = resolveMcpSteps(workflow)
-    Log.i("ZUtils-LLM", "=== 执行结束 ===")
-    return runQueryRaw(engine, resolved)
-}
-
-private suspend fun resolveMcpSteps(workflow: Workflow): Workflow = withContext(Dispatchers.IO) {
-    val hasMcp = workflow.steps.any { it.type == "mcp" && it.result == null }
-    if (!hasMcp) return@withContext workflow
-
-    val serverUrl = ServerConfig.DEFAULT_BASE_URL
-    val client = okhttp3.OkHttpClient.Builder()
+    val messages = mutableListOf(ChatMessage(role = "user", content = query))
+    val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+    val httpClient = okhttp3.OkHttpClient.Builder()
         .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
         .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
         .build()
-    val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
 
-    var lastMcpOutput: String? = null
-    val resolvedSteps = workflow.steps.map { step ->
-        if (step.type == "mcp" && step.result == null) {
-            // 如果上一步是 news_headlines 且当前是 translate_text，自动传入上一步结果
-            val mergedArgs = if (step.function == "translate_text" && lastMcpOutput != null) {
-                val text = step.args["text"]?.jsonPrimitive?.contentOrNull
-                if (text.isNullOrBlank() || text == "..." || text == "等待上一步结果") {
-                    val updated = step.args.toMap().toMutableMap()
-                    updated["text"] = kotlinx.serialization.json.JsonPrimitive(lastMcpOutput!!)
-                    kotlinx.serialization.json.JsonObject(updated)
-                } else step.args
-            } else step.args
+    var maxTurns = 10
+    while (maxTurns-- > 0) {
+        Log.i("ZUtils-LLM", "→ Agent 思考... (剩余 $maxTurns 轮)")
+        val result = llmClient.chat(messages, engine.getAllAvailableInfos())
 
-            val bodyJson = buildJsonObject {
-                put("tool", step.function)
-                put("arguments", mergedArgs)
+        when (result) {
+            is ChatResult.ToolCall -> {
+                Log.i("ZUtils-LLM", "  调用工具: ${result.function} args=${result.args}")
+                val output = executeMcpCall(httpClient, json, result.function, result.args)
+                Log.i("ZUtils-LLM", "  工具结果: $output")
+                messages.add(ChatMessage(role = "user",
+                    content = "${result.function} 的返回结果：$output\n\n根据结果决定下一步，如果任务完成请总结回复用户。"))
             }
-            val request = okhttp3.Request.Builder()
-                .url("$serverUrl/api/v1/mcp/call")
-                .post(bodyJson.toString().toRequestBody("application/json".toMediaType()))
-                .build()
-            val response = client.newCall(request).execute()
-            val body = response.body?.string() ?: ""
-            val root = json.parseToJsonElement(body).jsonObject
-            val output = root["data"]?.jsonObject?.get("output")?.jsonPrimitive?.contentOrNull ?: ""
-            Log.i("ZUtils-MCP", "${step.function} → $output")
-            lastMcpOutput = output
-            step.copy(result = output, args = mergedArgs)
-        } else {
-            step
+            is ChatResult.FinalAnswer -> {
+                Log.i("ZUtils-LLM", "✓ 最终答案: ${result.text}")
+                return ResultContent.Text(result.text)
+            }
+            is ChatResult.Error -> {
+                Log.w("ZUtils-LLM", "⚠️ Agent 错误: ${result.message}")
+                return runQueryRaw(engine, parseQuery(query))
+            }
         }
     }
-    Workflow(resolvedSteps, workflow.summary)
+    return ResultContent.Text("任务执行超时，请重试")
+}
+
+private suspend fun executeMcpCall(
+    client: okhttp3.OkHttpClient,
+    json: kotlinx.serialization.json.Json,
+    function: String,
+    args: kotlinx.serialization.json.JsonObject,
+): String = withContext(Dispatchers.IO) {
+    val bodyJson = kotlinx.serialization.json.buildJsonObject {
+        put("tool", function)
+        put("arguments", args)
+    }
+    val request = okhttp3.Request.Builder()
+        .url("${ServerConfig.DEFAULT_BASE_URL}/api/v1/mcp/call")
+        .post(bodyJson.toString().toRequestBody("application/json".toMediaType()))
+        .build()
+    val response = client.newCall(request).execute()
+    val body = response.body?.string() ?: ""
+    val root = json.parseToJsonElement(body).jsonObject
+    root["data"]?.jsonObject?.get("output")?.jsonPrimitive?.contentOrNull ?: body
 }
 
 private fun parseQuery(query: String): Workflow {

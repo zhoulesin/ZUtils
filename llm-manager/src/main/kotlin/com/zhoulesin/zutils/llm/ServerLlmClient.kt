@@ -1,6 +1,8 @@
 package com.zhoulesin.zutils.llm
 
 import com.zhoulesin.zutils.engine.core.FunctionInfo
+import com.zhoulesin.zutils.engine.llm.ChatMessage
+import com.zhoulesin.zutils.engine.llm.ChatResult
 import com.zhoulesin.zutils.engine.llm.LlmClient
 import com.zhoulesin.zutils.engine.workflow.Workflow
 import com.zhoulesin.zutils.engine.workflow.WorkflowResult
@@ -91,6 +93,39 @@ class ServerLlmClient(
         } catch (e: Exception) {
             android.util.Log.e("ZUtils-LLM", "Server LLM call failed", e)
             Workflow(emptyList(), summary = "服务器 LLM 不可用: ${e.message}")
+        }
+    }
+
+    override suspend fun chat(
+        messages: List<ChatMessage>,
+        availableFunctions: List<FunctionInfo>,
+    ): ChatResult {
+        val schemas = availableFunctions.map { fn ->
+            FunctionSchema(
+                name = fn.name,
+                description = fn.description,
+                parameters = fn.parameters.map { p ->
+                    ParamSchema(name = p.name, description = p.description, type = p.type.name, required = p.required)
+                }
+            )
+        }
+        val msgsJson = json.encodeToString(messages.map { mapOf("role" to it.role, "content" to it.content) })
+        val schemasJson = json.encodeToString(schemas)
+        val bodyJson = """{"messages":$msgsJson,"functions":$schemasJson}"""
+        return try {
+            val response = post("$serverBaseUrl/api/v1/llm/chat", bodyJson)
+            val root = json.parseToJsonElement(response).jsonObject
+            val data = root["data"]?.jsonObject ?: return ChatResult.Error("no data")
+            val toolName = data["toolName"]?.jsonPrimitive?.contentOrNull
+            if (toolName != null) {
+                val argsObj = data["toolArgs"]?.jsonObject ?: kotlinx.serialization.json.JsonObject(emptyMap())
+                ChatResult.ToolCall(toolName, argsObj)
+            } else {
+                val text = data["text"]?.jsonPrimitive?.contentOrNull ?: ""
+                ChatResult.FinalAnswer(text)
+            }
+        } catch (e: Exception) {
+            ChatResult.Error("Chat failed: ${e.message}")
         }
     }
 
