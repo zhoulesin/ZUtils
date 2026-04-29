@@ -18,11 +18,13 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.background
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
@@ -46,6 +48,10 @@ import com.zhoulesin.zutils.ui.screen.CapabilitiesScreen
 import com.zhoulesin.zutils.ui.screen.AutomationRulesScreen
 import com.zhoulesin.zutils.ui.screen.WorkflowBuilderScreen
 import com.zhoulesin.zutils.config.ServerConfig
+import com.zhoulesin.zutils.ui.theme.RaycastBorder
+import com.zhoulesin.zutils.ui.theme.RaycastWhite
+import com.zhoulesin.zutils.ui.theme.RaycastWhiteBorder06
+import com.zhoulesin.zutils.ui.theme.RaycastWhiteBorder08
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.jsonObject
@@ -169,34 +175,68 @@ private fun MainScreen(engine: Engine) {
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            TopAppBar(
-                title = { Text("ZUtils AI Engine") },
-                actions = {},
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+            Column {
+                TopAppBar(
+                    title = { Text("ZUtils", style = MaterialTheme.typography.titleMedium) },
+                    actions = {},
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background,
+                        titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    )
                 )
-            )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(RaycastBorder)
+                )
+            }
         },
         bottomBar = {
-            NavigationBar {
+            NavigationBar(
+                containerColor = MaterialTheme.colorScheme.background,
+                tonalElevation = 0.dp,
+            ) {
                 NavigationBarItem(
                     selected = tab == Tab.EXECUTE,
                     onClick = { tab = Tab.EXECUTE },
                     icon = { Text("▶") },
                     label = { Text("执行") },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                        selectedTextColor = MaterialTheme.colorScheme.primary,
+                        indicatorColor = Color.Transparent,
+                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
                 )
                 NavigationBarItem(
                     selected = tab == Tab.CAPABILITIES,
                     onClick = { tab = Tab.CAPABILITIES },
                     icon = { Text("🧩") },
                     label = { Text("能力") },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                        selectedTextColor = MaterialTheme.colorScheme.primary,
+                        indicatorColor = Color.Transparent,
+                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
                 )
                 NavigationBarItem(
                     selected = tab == Tab.AUTOMATION,
                     onClick = { tab = Tab.AUTOMATION },
                     icon = { Text("⚡") },
                     label = { Text("自动化") },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                        selectedTextColor = MaterialTheme.colorScheme.primary,
+                        indicatorColor = Color.Transparent,
+                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
                 )
             }
         }
@@ -204,12 +244,14 @@ private fun MainScreen(engine: Engine) {
         when (tab) {
             Tab.EXECUTE -> ExecuteScreen(engine, history, llmClient, Modifier.padding(padding))
             Tab.CAPABILITIES -> {
+                var builtinInfos by remember { mutableStateOf(emptyList<com.zhoulesin.zutils.engine.core.FunctionInfo>()) }
                 var dexInfos by remember { mutableStateOf(emptyList<com.zhoulesin.zutils.engine.core.FunctionInfo>()) }
                 LaunchedEffect(Unit) {
-                    dexInfos = engine.dexLoader?.getAllPluginInfos() ?: emptyList()
+                    try { dexInfos = engine.dexLoader?.getAllPluginInfos() ?: emptyList()
+                    } catch (_: Exception) { dexInfos = emptyList() }
                 }
                 CapabilitiesScreen(
-                    builtinFunctions = engine.registry.getAllInfos(),
+                    builtinFunctions = builtinInfos,
                     dexPluginInfos = dexInfos,
                     serverBaseUrl = serverBaseUrl,
                     modifier = Modifier.padding(padding),
@@ -277,13 +319,18 @@ private fun ExecuteScreen(
                         .clickable { expanded = !expanded },
                     colors = CardDefaults.cardColors(
                         containerColor = if (isError) {
-                            MaterialTheme.colorScheme.errorContainer
-                        } else {
                             MaterialTheme.colorScheme.surfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.surface
                         },
-                    )
+                    ),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (isError) MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
+                        else RaycastWhiteBorder06,
+                    ),
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
+                    Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 11.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -378,6 +425,16 @@ private fun ExecuteScreen(
                 placeholder = { Text("输入你的需求") },
                 enabled = !isLoading,
                 singleLine = true,
+                shape = RoundedCornerShape(8.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = RaycastWhiteBorder08,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.background,
+                    focusedContainerColor = MaterialTheme.colorScheme.background,
+                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    unfocusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
             )
             Button(
                 onClick = {
@@ -398,14 +455,26 @@ private fun ExecuteScreen(
                     }
                 },
                 enabled = !isLoading && input.isNotBlank(),
+                shape = RoundedCornerShape(86.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                contentPadding = PaddingValues(0.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, RaycastWhiteBorder08),
             ) {
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp,
-                    )
-                } else {
-                    Text("执行")
+                Box(
+                    modifier = Modifier
+                        .defaultMinSize(minHeight = 40.dp, minWidth = 72.dp)
+                        .padding(horizontal = 14.dp, vertical = 9.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = RaycastWhite,
+                        )
+                    } else {
+                        Text("执行", color = RaycastWhite)
+                    }
                 }
             }
         }

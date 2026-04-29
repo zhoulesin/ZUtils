@@ -8,9 +8,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 import com.zhoulesin.zutils.data.AutomationRule
 import com.zhoulesin.zutils.engine.AutomationEngine
+import com.zhoulesin.zutils.ui.theme.RaycastBlueTransparent
+import com.zhoulesin.zutils.ui.theme.RaycastCardSurface
+import com.zhoulesin.zutils.ui.theme.RaycastWhiteBorder06
 import kotlinx.coroutines.launch
 
 @Composable
@@ -28,7 +32,7 @@ fun AutomationRulesScreen(
     LaunchedEffect(Unit) { refresh() }
 
     Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
-        Text("⚡ 自动化", style = MaterialTheme.typography.titleLarge)
+        Text("自动化规则", style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.height(4.dp))
         Text("管理定时执行的自动化规则", style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -62,21 +66,35 @@ private fun AutomationRuleCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = if (enabled) MaterialTheme.colorScheme.surfaceVariant
-                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            containerColor = if (enabled) MaterialTheme.colorScheme.surface
+                else MaterialTheme.colorScheme.surface.copy(alpha = 0.65f)
+        ),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            RaycastWhiteBorder06.copy(alpha = if (enabled) 1f else 0.6f),
         ),
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 11.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(rule.name, style = MaterialTheme.typography.titleSmall)
                     Spacer(Modifier.width(6.dp))
-                    Text(rule.cron, style = MaterialTheme.typography.labelSmall,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.primary)
+                    Surface(
+                        color = RaycastCardSurface,
+                        shape = RoundedCornerShape(6.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, RaycastWhiteBorder06),
+                    ) {
+                        Text(
+                            rule.cron,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
                 }
                 Text(rule.stepsJson.take(100).replace("\n", " ") + if (rule.stepsJson.length > 100) "…" else "",
                     style = MaterialTheme.typography.bodySmall,
@@ -88,7 +106,12 @@ private fun AutomationRuleCard(
                 onCheckedChange = { v ->
                     enabled = v
                     scope.launch { autoEngine.toggle(rule.id, v); onChanged() }
-                }
+                },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                    checkedTrackColor = MaterialTheme.colorScheme.primary,
+                    uncheckedTrackColor = RaycastBlueTransparent,
+                ),
             )
         }
     }
