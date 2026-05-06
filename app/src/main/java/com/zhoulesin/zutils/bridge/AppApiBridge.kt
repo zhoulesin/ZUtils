@@ -18,17 +18,21 @@ object AppApiBridge : ApiBridge {
             val methodName = params.firstOrNull() ?: return "缺少方法名"
             val rawArgs = params.drop(1).map { if (it == "appContext") appContext else it }
 
-            // 按参数类型匹配方法（避免 count 相同但类型不同导致选错重载）
+            // 按参数类型匹配方法（优先精确匹配，避免 count 相同但选错重载）
             val candidates = (clazz.methods + clazz.declaredMethods)
                 .filter { it.name == methodName && it.parameterCount == rawArgs.size }
 
-            val method = candidates.firstOrNull { m ->
-                rawArgs.indices.all { i ->
+            val method = candidates.maxByOrNull { m ->
+                rawArgs.indices.sumOf { i ->
                     val raw = rawArgs[i]; val pt = m.parameterTypes[i]
-                    raw === appContext || pt.isAssignableFrom(raw::class.java) || pt.isPrimitive()
+                    when {
+                        raw === appContext && pt == Context::class.java -> 3
+                        pt.isAssignableFrom(raw::class.java) -> 2
+                        pt.isPrimitive() -> 1  // 需要类型转换，优先级最低
+                        else -> 0
+                    }
                 }
-            } ?: candidates.firstOrNull()
-                ?: return "未找到方法 $methodName(${rawArgs.size}参数)"
+            } ?: return "未找到方法 $methodName(${rawArgs.size}参数)"
 
             val typedArgs = rawArgs.mapIndexed { i, arg ->
                 if (arg === appContext) arg else convertArg(arg, method.parameterTypes[i])
