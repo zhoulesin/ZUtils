@@ -1,6 +1,7 @@
 package com.zhoulesin.zutils.bridge
 
 import com.zhoulesin.zutils.engine.core.*
+import kotlinx.serialization.json.JsonObject
 
 /**
  * 将桥接模式 DEX 包装为 ZFunction，注册到 Engine。
