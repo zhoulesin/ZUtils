@@ -172,12 +172,15 @@ class DefaultDexLoader(
             val clazz = loader.loadClass(spec.className)
             val instance = clazz.getDeclaredConstructor().newInstance()
 
-            // Inject ApiBridge if the DEX class supports it
+            // Inject ApiBridge if the DEX class supports it (reflective, no compile dep)
             try {
                 val setBridge = clazz.getMethod("setApiBridge", Any::class.java)
-                setBridge.invoke(instance, com.zhoulesin.zutils.bridge.AppApiBridge)
+                val bridgeClass = Class.forName("com.zhoulesin.zutils.bridge.AppApiBridge")
+                val bridge = bridgeClass.getField("INSTANCE").get(null)
+                setBridge.invoke(instance, bridge)
                 Log.i(TAG, "ApiBridge injected into ${spec.className}")
             } catch (_: NoSuchMethodException) { /* not a bridge DEX, ignore */ }
+            catch (_: ClassNotFoundException) { Log.w(TAG, "AppApiBridge not in classpath") }
 
             val function = when {
                 instance is ZFunction -> {
