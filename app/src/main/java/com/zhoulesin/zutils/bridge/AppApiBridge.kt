@@ -1,6 +1,8 @@
 package com.zhoulesin.zutils.bridge
 
 import android.content.Context
+import android.util.Log
+import com.zhoulesin.zutils.bridge.AppApiBridge.appContext
 import com.zhoulesin.zutils.engine.bridge.ApiBridge
 import java.lang.reflect.Modifier
 
@@ -18,9 +20,20 @@ object AppApiBridge : ApiBridge {
             val methodName = params.firstOrNull() ?: return "缺少方法名"
             val rawArgs = params.drop(1).map { if (it == "appContext") appContext else it }
 
+            Log.i("ZUtils-Bridge", "callApi class=$apiTag method=$methodName argCount=${rawArgs.size}")
+            for ((i, a) in rawArgs.withIndex()) {
+                Log.i("ZUtils-Bridge", "  arg[$i]: type=${a::class.java.simpleName} value=$a")
+            }
+
             // 按参数类型匹配方法（优先精确匹配，避免 count 相同但选错重载）
             val candidates = (clazz.methods + clazz.declaredMethods)
                 .filter { it.name == methodName && it.parameterCount == rawArgs.size }
+
+            Log.i("ZUtils-Bridge", "  candidates count=${candidates.size}")
+            for (c in candidates) {
+                val sig = c.parameterTypes.joinToString(",") { it.simpleName }
+                Log.i("ZUtils-Bridge", "  candidate: $sig")
+            }
 
             val method = candidates.maxByOrNull { m ->
                 rawArgs.indices.sumOf { i ->
@@ -28,20 +41,43 @@ object AppApiBridge : ApiBridge {
                     when {
                         raw === appContext && pt == Context::class.java -> 3
                         pt.isAssignableFrom(raw::class.java) -> 2
-                        pt.isPrimitive() -> 1  // 需要类型转换，优先级最低
+                        pt.isPrimitive() -> 1
                         else -> 0
                     }
                 }
-            } ?: return "未找到方法 $methodName(${rawArgs.size}参数)"
+            }
+
+            if (method == null) {
+                Log.w("ZUtils-Bridge", "  no matching method found")
+                return "未找到方法 $methodName(${rawArgs.size}参数)"
+            }
+
+            val sig = method.parameterTypes.joinToString(",") { it.simpleName }
+            Log.i("ZUtils-Bridge", "  selected: $sig")
 
             val typedArgs = rawArgs.mapIndexed { i, arg ->
-                if (arg === appContext) arg else convertArg(arg, method.parameterTypes[i])
+                if (arg === appContext) {
+                    Log.i("ZUtils-Bridge", "  typed[$i]=appContext")
+                    arg
+                } else {
+                    val converted = convertArg(arg, method.parameterTypes[i])
+                    Log.i("ZUtils-Bridge", "  typed[$i]=${converted::class.java.simpleName}($converted)")
+                    converted
+                }
             }.toTypedArray()
 
             val isStatic = Modifier.isStatic(method.modifiers)
             val instance = if (isStatic) null else appContext
-            method.invoke(instance, *typedArgs)
+            val result = method.invoke(instance, *typedArgs)
+            Log.i("ZUtils-Bridge", "  result type=${result?.let { it::class.java.simpleName } ?: "null"}")
+
+            result
+        } catch (e: java.lang.reflect.InvocationTargetException) {
+            val cause = e.cause
+            Log.w("ZUtils-Bridge", "  InvocationTargetException cause=${cause?.let { it::class.java.simpleName }}:${cause?.message}")
+            "反射失败(${cause?.let { it::class.java.simpleName }}): ${cause?.message ?: "无消息"}"
         } catch (e: Exception) {
+            Log.w("ZUtils-Bridge", "  error: ${e::class.java.simpleName}: ${e.message}")
             "反射失败(${e::class.java.simpleName}): ${e.message}"
         }
     }
