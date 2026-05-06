@@ -34,8 +34,8 @@ class BridgeDexAdapter(
                 }
             }
             val executeMethod = instance.javaClass.getDeclaredMethod("execute", Map::class.java)
-            val result = executeMethod.invoke(instance, paramsMap) as? String ?: "执行成功"
-            ZResult.ok(result)
+            val result = executeMethod.invoke(instance, paramsMap)
+            ZResult.ok(result?.toString() ?: "执行成功")
         } catch (e: Exception) {
             ZResult.fail("桥接执行失败: ${e.message}", "BRIDGE_ERROR")
         }
