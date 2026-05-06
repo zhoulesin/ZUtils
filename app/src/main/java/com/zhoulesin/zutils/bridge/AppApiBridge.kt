@@ -17,15 +17,17 @@ object AppApiBridge : ApiBridge {
     override fun callApi(apiTag: String, params: List<String>): String {
         return try {
             val clazz = Class.forName(apiTag)
-            val methodName = params.firstOrNull() ?: return "缺少方法名"
+            val rawFirst = params.firstOrNull() ?: return "缺少方法名"
+            val parts = rawFirst.split(":")
+            val methodName = parts[0]
+            val autoExec = parts.getOrNull(1)  // "makeText:show" → autoExec="show"
+
             val rawArgs = params.drop(1).map { if (it == "appContext") appContext else it }
 
-            // 按参数个数匹配方法
             val method = clazz.methods.firstOrNull { it.name == methodName && it.parameterCount == rawArgs.size }
                 ?: clazz.declaredMethods.firstOrNull { it.name == methodName && it.parameterCount == rawArgs.size }
                 ?: return "未找到方法 $methodName(${rawArgs.size}参数)"
 
-            // 按方法声明的参数类型转换实参
             val typedArgs = rawArgs.mapIndexed { i, arg ->
                 if (arg === appContext) arg else convertArg(arg, method.parameterTypes[i])
             }.toTypedArray()
@@ -34,18 +36,18 @@ object AppApiBridge : ApiBridge {
             val instance = if (isStatic) null else appContext
             val result = method.invoke(instance, *typedArgs)
 
-            // 自动执行 builder 模式：Toast.show()、Intent.startActivity()、Dialog.show() 等
-            if (result != null) {
-                for (autoMethod in listOf("show", "start", "startActivity", "commit", "execute", "run")) {
-                    try {
-                        val m = result::class.java.getMethod(autoMethod)
-                        if (m.parameterCount == 0) {
-                            Handler(Looper.getMainLooper()).post { m.invoke(result) }
-                        }
-                        break
-                    } catch (_: NoSuchMethodException) { continue }
+            // :show → 在主线程调 result.show()
+            if (autoExec != null && result != null) {
+                try {
+                    val m = result::class.java.getMethod(autoExec)
+                    if (m.parameterCount == 0) {
+                        Handler(Looper.getMainLooper()).post { m.invoke(result) }
+                    }
+                } catch (_: NoSuchMethodException) {
+                    return "方法 $methodName 执行成功，但后续 $autoExec 调用失败：对象无此无参方法"
                 }
             }
+
             result?.toString() ?: "null"
         } catch (e: Exception) {
             "反射失败(${e::class.java.simpleName}): ${e.message}"
