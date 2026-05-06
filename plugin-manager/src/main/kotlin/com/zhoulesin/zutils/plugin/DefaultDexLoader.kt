@@ -9,6 +9,7 @@ import com.zhoulesin.zutils.engine.core.OutputType
 import com.zhoulesin.zutils.engine.core.Parameter
 import com.zhoulesin.zutils.engine.core.ParameterType
 import com.zhoulesin.zutils.engine.core.ZFunction
+import com.zhoulesin.zutils.engine.bridge.ApiBridge
 import com.zhoulesin.zutils.engine.dex.DependencySpec
 import com.zhoulesin.zutils.engine.dex.DexLoader
 import com.zhoulesin.zutils.engine.dex.DexSpec
@@ -172,15 +173,14 @@ class DefaultDexLoader(
             val clazz = loader.loadClass(spec.className)
             val instance = clazz.getDeclaredConstructor().newInstance()
 
-            // Inject ApiBridge if the DEX class supports it (reflective, no compile dep)
+            // Inject ApiBridge if the DEX class supports it
             try {
-                val setBridge = clazz.getMethod("setApiBridge", Any::class.java)
+                val setBridge = clazz.getMethod("setApiBridge", ApiBridge::class.java)
                 val bridgeClass = Class.forName("com.zhoulesin.zutils.bridge.AppApiBridge")
-                val bridge = bridgeClass.getField("INSTANCE").get(null)
+                val bridge = bridgeClass.getField("INSTANCE").get(null) as ApiBridge
                 setBridge.invoke(instance, bridge)
                 Log.i(TAG, "ApiBridge injected into ${spec.className}")
             } catch (_: NoSuchMethodException) { /* not a bridge DEX, ignore */ }
-            catch (_: ClassNotFoundException) { Log.w(TAG, "AppApiBridge not in classpath") }
 
             val function = when {
                 instance is ZFunction -> {

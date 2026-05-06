@@ -1,6 +1,7 @@
 package com.zhoulesin.zutils.bridge
 
 import android.content.Context
+import com.zhoulesin.zutils.engine.bridge.ApiBridge
 import java.lang.reflect.Modifier
 
 object AppApiBridge : ApiBridge {

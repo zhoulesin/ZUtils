@@ -1,5 +1,6 @@
 package com.zhoulesin.zutils.bridge
 
+import com.zhoulesin.zutils.engine.bridge.ApiBridge
 import com.zhoulesin.zutils.engine.core.*
 import kotlinx.serialization.json.JsonObject
 
