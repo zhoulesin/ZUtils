@@ -34,12 +34,17 @@ object AppApiBridge : ApiBridge {
             val instance = if (isStatic) null else appContext
             val result = method.invoke(instance, *typedArgs)
 
-            // 自动调用 show()（适配 Toast、Dialog 等 builder 模式，切回主线程）
+            // 自动执行 builder 模式：Toast.show()、Intent.startActivity()、Dialog.show() 等
             if (result != null) {
-                try {
-                    val showMethod = result::class.java.getMethod("show")
-                    Handler(Looper.getMainLooper()).post { showMethod.invoke(result) }
-                } catch (_: Exception) {}
+                for (autoMethod in listOf("show", "start", "startActivity", "commit", "execute", "run")) {
+                    try {
+                        val m = result::class.java.getMethod(autoMethod)
+                        if (m.parameterCount == 0) {
+                            Handler(Looper.getMainLooper()).post { m.invoke(result) }
+                        }
+                        break
+                    } catch (_: NoSuchMethodException) { continue }
+                }
             }
             result?.toString() ?: "null"
         } catch (e: Exception) {
