@@ -1,15 +1,21 @@
 package com.zhoulesin.zutils.bridge
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
-import java.io.File
+import java.lang.reflect.Modifier
 
 /**
- * ApiBridge 的 Android 宿主实现。
+ * 通用反射桥——通过类名+方法名+实参调用任意安卓静态方法或实例方法。
  *
- * 只暴露底层安卓 API，不包含任何业务逻辑。
- * 业务逻辑在 Playground Kotlin 代码中完成。
+ * DEX 调用示例（创建文件夹）：
+ *   val cls = Class.forName("java.io.File")
+ *   val ctor = cls.getConstructor(String::class.java)
+ *   val file = ctor.newInstance("/data/data/.../files/mydir")
+ *   val ok = file::class.java.getMethod("mkdirs").invoke(file)
+ *   return ok.toString()
+ *
+ * 实际上纯 JDK 反射调用不需要 bridge。
+ * bridge 只用于无法在 DEX 中直接引用的 Android 类：
+ *   bridge.callApi("android.widget.Toast", listOf("showToast", "appContext", "hello"))
  */
 object AppApiBridge : ApiBridge {
 
@@ -19,64 +25,30 @@ object AppApiBridge : ApiBridge {
         appContext = context.applicationContext
     }
 
+    /**
+     * 反射调用安卓 API。
+     * @param apiTag 全类名，如 "android.widget.Toast"
+     * @param params [0]=方法名, [1..n]=实参。"appContext" 自动替换为 Application Context
+     */
     override fun callApi(apiTag: String, params: List<String>): String {
-        return when (apiTag) {
-            "get_files_dir" -> appContext.filesDir.absolutePath
-            "read_file" -> readFile(params)
-            "write_file" -> writeFile(params)
-            "file_exists" -> fileExists(params)
-            "delete_file" -> deleteFile(params)
-            "mkdirs" -> mkdirs(params)
-            "clipboard_copy" -> clipboardCopy(params)
-            "clipboard_paste" -> clipboardPaste()
-            "show_toast" -> showToast(params)
-            else -> "未知 API: $apiTag"
-        }
-    }
-
-    private fun readFile(params: List<String>): String {
-        if (params.isEmpty()) return "参数缺失：路径"
-        return try { File(params[0]).readText() } catch (e: Exception) { "读取失败: ${e.message}" }
-    }
-
-    private fun writeFile(params: List<String>): String {
-        if (params.size < 2) return "参数缺失：路径/内容"
         return try {
-            File(params[0]).writeText(params[1])
-            "写入成功"
-        } catch (e: Exception) { "写入失败: ${e.message}" }
-    }
+            val clazz = Class.forName(apiTag)
+            val methodName = params.firstOrNull() ?: return "缺少方法名"
+            val args = params.drop(1).map { if (it == "appContext") appContext else it }
+            val argTypes = args.map { it::class.java }.toTypedArray()
 
-    private fun fileExists(params: List<String>): String {
-        if (params.isEmpty()) return "参数缺失：路径"
-        return File(params[0]).exists().toString()
-    }
+            val method = clazz.methods.firstOrNull { m ->
+                m.name == methodName && m.parameterCount == args.size
+            } ?: clazz.declaredMethods.firstOrNull { m ->
+                m.name == methodName && m.parameterCount == args.size
+            } ?: return "未找到方法 $methodName(${args.size}参数)"
 
-    private fun deleteFile(params: List<String>): String {
-        if (params.isEmpty()) return "参数缺失：路径"
-        return try { File(params[0]).delete().toString() } catch (e: Exception) { "删除失败: ${e.message}" }
-    }
-
-    private fun mkdirs(params: List<String>): String {
-        if (params.isEmpty()) return "参数缺失：路径"
-        return try { File(params[0]).mkdirs().toString() } catch (e: Exception) { "创建失败: ${e.message}" }
-    }
-
-    private fun clipboardCopy(params: List<String>): String {
-        if (params.isEmpty()) return "参数缺失：内容"
-        val cm = appContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        cm.setPrimaryClip(ClipData.newPlainText("ai", params[0]))
-        return "已复制"
-    }
-
-    private fun clipboardPaste(): String {
-        val cm = appContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        return cm.primaryClip?.getItemAt(0)?.text?.toString() ?: "(空)"
-    }
-
-    private fun showToast(params: List<String>): String {
-        if (params.isEmpty()) return "参数缺失：内容"
-        android.widget.Toast.makeText(appContext, params[0], android.widget.Toast.LENGTH_SHORT).show()
-        return "已显示"
+            val isStatic = Modifier.isStatic(method.modifiers)
+            val instance = if (isStatic) null else appContext
+            val result = method.invoke(instance, *args.toTypedArray())
+            result?.toString() ?: "null"
+        } catch (e: Exception) {
+            "反射失败(${e::class.java.simpleName}): ${e.message}"
+        }
     }
 }
