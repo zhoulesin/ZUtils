@@ -115,7 +115,6 @@ class MainActivity : ComponentActivity() {
             it.registry.register(GetBatteryLevelFunction())
             it.registry.register(SetScreenBrightnessFunction())
             it.registry.register(GetDeviceInfoFunction())
-            it.registry.register(ToastFunction())
             it.registry.register(GetVolumeFunction())
             it.registry.register(SetVolumeFunction())
             it.registry.register(SetClipboardFunction())
@@ -592,21 +591,6 @@ private fun parseQuery(query: String): Workflow {
         q.contains("设备") || q.contains("device") || q.contains("手机信息") -> {
             listOf(step("getDeviceInfo"))
         }
-        q.contains("toast") || q.contains("提示") -> {
-            val msg = q.removePrefix("toast").removePrefix("提示").trim()
-                .ifEmpty { "Hello from ZUtils!" }
-            listOf(step("toast", "message" to msg))
-        }
-        q.contains("uuid") || q.contains("随机码") -> {
-            listOf(step("uuid"))
-        }
-        q.contains("base64") -> {
-            val isEncode = !q.contains("解码") && !q.contains("decode")
-            val text = q.replace("base64", "").replace("编码", "").replace("解码", "").trim()
-                .ifEmpty { "hello" }
-            listOf(step("base64", "action" to if (isEncode) "encode" else "decode", "text" to text))
-        }
-
         q.contains("音量") || q.contains("volume") -> {
             val level = Regex("""(\d+)""").find(q)?.groupValues?.get(1)?.toIntOrNull()
             if (level != null) {
@@ -655,9 +639,7 @@ private fun parseQuery(query: String): Workflow {
                 if (q.contains("uuid")) {
                     add(step("uuid"))
                 }
-                if (q.contains("toast")) {
-                    add(step("toast", "message" to "All done!"))
-                }
+
                 if (isEmpty()) add(step("getDeviceInfo"))
             }
         }
