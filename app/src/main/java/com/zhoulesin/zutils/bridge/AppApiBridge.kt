@@ -3,16 +3,13 @@ package com.zhoulesin.zutils.bridge
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import com.zhoulesin.zutils.engine.core.ExecutionContext
-import com.zhoulesin.zutils.engine.core.ZResult
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 
 /**
  * ApiBridge 的 Android 宿主实现。
- * App 启动时调用 init()，所有 DEX 插件通过此桥间接调用安卓能力。
+ *
+ * 只暴露底层安卓 API，不包含任何业务逻辑。
+ * 业务逻辑在 Playground Kotlin 代码中完成。
  */
 object AppApiBridge : ApiBridge {
 
@@ -24,41 +21,62 @@ object AppApiBridge : ApiBridge {
 
     override fun callApi(apiTag: String, params: List<String>): String {
         return when (apiTag) {
-            "folder_create" -> handleFolderCreate(params)
-            "file_write" -> handleFileWrite(params)
-            "clipboard_copy" -> handleClipboardCopy(params)
-            else -> "未知能力标识：$apiTag"
+            "get_files_dir" -> appContext.filesDir.absolutePath
+            "read_file" -> readFile(params)
+            "write_file" -> writeFile(params)
+            "file_exists" -> fileExists(params)
+            "delete_file" -> deleteFile(params)
+            "mkdirs" -> mkdirs(params)
+            "clipboard_copy" -> clipboardCopy(params)
+            "clipboard_paste" -> clipboardPaste()
+            "show_toast" -> showToast(params)
+            else -> "未知 API: $apiTag"
         }
     }
 
-    private fun handleFolderCreate(params: List<String>): String {
-        if (params.isEmpty()) return "参数缺失：文件夹名"
-        val root = File(appContext.filesDir, "AIWorkSpace")
-        val target = File(root, params[0])
-        return if (target.exists()) {
-            "文件夹已存在:${target.absolutePath}"
-        } else {
-            if (target.mkdirs()) "创建成功:${target.absolutePath}" else "创建失败"
-        }
+    private fun readFile(params: List<String>): String {
+        if (params.isEmpty()) return "参数缺失：路径"
+        return try { File(params[0]).readText() } catch (e: Exception) { "读取失败: ${e.message}" }
     }
 
-    private fun handleFileWrite(params: List<String>): String {
-        if (params.size < 3) return "参数缺失：文件夹名/文件名/内容"
-        val root = File(appContext.filesDir, "AIWorkSpace")
-        val folder = File(root, params[0]).also { if (!it.exists()) it.mkdirs() }
-        val file = File(folder, params[1])
+    private fun writeFile(params: List<String>): String {
+        if (params.size < 2) return "参数缺失：路径/内容"
         return try {
-            file.writeText(params[2])
-            "文件写入成功:${file.absolutePath}"
-        } catch (e: Exception) {
-            "写入失败:${e.message}"
-        }
+            File(params[0]).writeText(params[1])
+            "写入成功"
+        } catch (e: Exception) { "写入失败: ${e.message}" }
     }
 
-    private fun handleClipboardCopy(params: List<String>): String {
-        if (params.isEmpty()) return "参数缺失：复制内容"
+    private fun fileExists(params: List<String>): String {
+        if (params.isEmpty()) return "参数缺失：路径"
+        return File(params[0]).exists().toString()
+    }
+
+    private fun deleteFile(params: List<String>): String {
+        if (params.isEmpty()) return "参数缺失：路径"
+        return try { File(params[0]).delete().toString() } catch (e: Exception) { "删除失败: ${e.message}" }
+    }
+
+    private fun mkdirs(params: List<String>): String {
+        if (params.isEmpty()) return "参数缺失：路径"
+        return try { File(params[0]).mkdirs().toString() } catch (e: Exception) { "创建失败: ${e.message}" }
+    }
+
+    private fun clipboardCopy(params: List<String>): String {
+        if (params.isEmpty()) return "参数缺失：内容"
         val cm = appContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        cm.setPrimaryClip(ClipData.newPlainText("AIWork", params[0]))
-        return "已复制到剪贴板"
+        cm.setPrimaryClip(ClipData.newPlainText("ai", params[0]))
+        return "已复制"
+    }
+
+    private fun clipboardPaste(): String {
+        val cm = appContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        return cm.primaryClip?.getItemAt(0)?.text?.toString() ?: "(空)"
+    }
+
+    private fun showToast(params: List<String>): String {
+        if (params.isEmpty()) return "参数缺失：内容"
+        android.widget.Toast.makeText(appContext, params[0], android.widget.Toast.LENGTH_SHORT).show()
+        return "已显示"
     }
 }
