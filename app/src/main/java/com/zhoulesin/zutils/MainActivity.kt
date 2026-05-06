@@ -96,6 +96,7 @@ class MainActivity : ComponentActivity() {
         val db = com.zhoulesin.zutils.data.DatabaseProvider.get(this)
         val autoDao = db.automationRuleDao()
         val autoEngine = com.zhoulesin.zutils.engine.AutomationEngine(this, autoDao)
+        com.zhoulesin.zutils.bridge.AppApiBridge.init(this)
 
         engine = Engine(
             androidContext = this,
