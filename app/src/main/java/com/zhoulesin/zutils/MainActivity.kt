@@ -526,7 +526,12 @@ private suspend fun runQuery(
                 val argsStr = result.args.toString()
                 push("🔧 调用: $fn")
                 if (argsStr.length < 100) push("   参数: $argsStr")
-                val output = executeMcpCall(httpClient, json, fn, result.args)
+
+                val output = if (fn in com.zhoulesin.zutils.engine.AutomationEngine.MCP_TOOLS) {
+                    executeMcpCall(httpClient, json, fn, result.args)
+                } else {
+                    runLocalFunction(engine, fn, result.args)
+                }
                 push("✅ 结果: ${output.take(150)}${if (output.length > 150) "…" else ""}")
                 messages.add(ChatMessage(role = "user",
                     content = "$fn 的返回结果：$output\n\n根据结果决定下一步，如果任务完成请总结回复用户。"))
@@ -545,6 +550,20 @@ private suspend fun runQuery(
     }
     push("⏰ 执行超时")
     return ResultContent.Text(logs.toString())
+}
+
+private suspend fun runLocalFunction(
+    engine: Engine, function: String, args: kotlinx.serialization.json.JsonObject,
+): String {
+    val step = com.zhoulesin.zutils.engine.workflow.WorkflowStep(id = 0, function = function, args = args, type = "local")
+    val workflow = com.zhoulesin.zutils.engine.workflow.Workflow(steps = listOf(step))
+    val result = engine.execute(workflow)
+    val stepResult = result.steps.firstOrNull()
+    return when (val r = stepResult?.result) {
+        is com.zhoulesin.zutils.engine.core.ZResult.Success -> r.data.toString()
+        is com.zhoulesin.zutils.engine.core.ZResult.Error -> "执行失败: ${r.message}"
+        else -> "无结果"
+    }
 }
 
 private suspend fun executeMcpCall(
