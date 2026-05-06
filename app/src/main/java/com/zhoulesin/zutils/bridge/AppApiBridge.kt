@@ -35,11 +35,16 @@ object AppApiBridge : ApiBridge {
     }
 
     private fun convertArg(value: Any, target: Class<*>): Any = when (target) {
-        Int::class.java, Integer::class.java -> (value as String).toIntOrNull() ?: 0
-        Long::class.java -> (value as String).toLongOrNull() ?: 0L
-        Float::class.java -> (value as String).toFloatOrNull() ?: 0f
-        Double::class.java -> (value as String).toDoubleOrNull() ?: 0.0
-        Boolean::class.java -> (value as String).toBoolean()
+        Int::class.java, Int::class.javaPrimitiveType, Integer::class.java ->
+            (value as String).toIntOrNull() ?: 0
+        Long::class.java, Long::class.javaPrimitiveType ->
+            (value as String).toLongOrNull() ?: 0L
+        Float::class.java, Float::class.javaPrimitiveType ->
+            (value as String).toFloatOrNull() ?: 0f
+        Double::class.java, Double::class.javaPrimitiveType ->
+            (value as String).toDoubleOrNull() ?: 0.0
+        Boolean::class.java, Boolean::class.javaPrimitiveType ->
+            (value as String).toBoolean()
         CharSequence::class.java -> value as String
         else -> value
     }
