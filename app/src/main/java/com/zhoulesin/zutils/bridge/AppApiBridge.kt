@@ -9,9 +9,11 @@ import java.lang.reflect.Modifier
 object AppApiBridge : ApiBridge {
 
     lateinit var appContext: Context
+    lateinit var appHandler: android.os.Handler
 
     fun init(context: Context) {
         appContext = context.applicationContext
+        appHandler = android.os.Handler(android.os.Looper.getMainLooper())
     }
 
     override fun callApi(apiTag: String, params: List<String>): Any? {
