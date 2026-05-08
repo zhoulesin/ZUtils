@@ -6,6 +6,7 @@ import com.zhoulesin.zutils.data.DatabaseProvider
 import com.zhoulesin.zutils.data.PluginInstallRepo
 import com.zhoulesin.zutils.engine.AutomationEngine
 import com.zhoulesin.zutils.engine.Engine
+import com.zhoulesin.zutils.engine.functions.Base64Function
 import com.zhoulesin.zutils.engine.functions.CreateAutomationFunction
 import com.zhoulesin.zutils.engine.functions.CreateCalendarEventFunction
 import com.zhoulesin.zutils.engine.functions.GetClipboardFunction
@@ -13,9 +14,12 @@ import com.zhoulesin.zutils.engine.functions.GetDeviceInfoFunction
 import com.zhoulesin.zutils.engine.functions.GetNetworkTypeFunction
 import com.zhoulesin.zutils.engine.functions.GetScreenInfoFunction
 import com.zhoulesin.zutils.engine.functions.GetStorageInfoFunction
+import com.zhoulesin.zutils.engine.functions.MakePhoneCallFunction
+import com.zhoulesin.zutils.engine.functions.QueryCalendarEventsFunction
 import com.zhoulesin.zutils.engine.functions.QueryContactsFunction
 import com.zhoulesin.zutils.engine.functions.ReadFileFunction
 import com.zhoulesin.zutils.engine.functions.SendNotificationFunction
+import com.zhoulesin.zutils.engine.functions.SendSmsFunction
 import com.zhoulesin.zutils.engine.functions.SetClipboardFunction
 import com.zhoulesin.zutils.engine.functions.ShareFileFunction
 import com.zhoulesin.zutils.engine.functions.WriteFileFunction
@@ -56,9 +60,13 @@ object ZUtilsEngineBootstrap {
             it.registry.register(GetStorageInfoFunction())
             it.registry.register(GetNetworkTypeFunction())
             it.registry.register(SendNotificationFunction())
+            it.registry.register(Base64Function())
             it.registry.register(CreateAutomationFunction(autoEngine))
             it.registry.register(CreateCalendarEventFunction())
+            it.registry.register(QueryCalendarEventsFunction())
             it.registry.register(QueryContactsFunction())
+            it.registry.register(MakePhoneCallFunction())
+            it.registry.register(SendSmsFunction())
             it.registry.register(ReadFileFunction())
             it.registry.register(WriteFileFunction())
             it.registry.register(ShareFileFunction())

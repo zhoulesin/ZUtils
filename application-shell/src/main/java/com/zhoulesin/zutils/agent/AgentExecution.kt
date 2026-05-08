@@ -135,6 +135,21 @@ object AgentExecution {
         workflow: Workflow,
         requestRuntimePermissions: (suspend (List<String>, String) -> Boolean)?,
     ): ResultContent {
+        val mcpSteps = workflow.steps.filter { it.function in McpKnownTools.ALL }
+        if (mcpSteps.isNotEmpty()) {
+            val mcpClient = McpClient()
+            val sb = StringBuilder()
+            for (step in mcpSteps) {
+                sb.appendLine("步骤: ${step.function}")
+                try {
+                    val output = mcpClient.callTool(step.function, step.args)
+                    sb.appendLine("  ✅ $output")
+                } catch (e: Exception) {
+                    sb.appendLine("  ❌ ${e.message}")
+                }
+            }
+            return ResultContent.Text(sb.toString().trimEnd())
+        }
         val result = engine.execute(workflow, requestRuntimePermissions)
         return formatResult(result)
     }
@@ -195,6 +210,24 @@ object AgentExecution {
                     .ifEmpty { " " }
                 listOf(workflowStep("queryContacts", "name" to name))
             }
+            q.contains("给") && q.contains("打电话") -> {
+                val name = q.replace("给", "").replace("打电话", "").trim()
+                    .ifEmpty { " " }
+                listOf(workflowStep("makePhoneCall", "contactName" to name))
+            }
+            q.contains("拨打") -> {
+                val number = q.replace("拨打", "").trim()
+                listOf(workflowStep("makePhoneCall", "phoneNumber" to number))
+            }
+            q.contains("发短信") || q.contains("发信息") -> {
+                val parts = q.split("说")
+                val name = parts[0].replace("给", "").replace("发短信", "").replace("发信息", "").trim()
+                val message = if (parts.size > 1) parts.drop(1).joinToString("说").trim() else ""
+                listOf(workflowStep("sendSms", "contactName" to name.ifEmpty { " " }, "message" to message.ifEmpty { "你好" }))
+            }
+            q.contains("查日历") || q.contains("查日程") || q.contains("安排") -> {
+                listOf(workflowStep("queryCalendarEvents"))
+            }
             q.contains("日历") || q.contains("日程") || q.contains("会议") || q.contains("提醒") -> {
                 val title = q.replace("日历", "").replace("日程", "").replace("会议", "").replace("提醒", "").trim()
                     .let { if (it.length > 2) it else "新建日程" }
@@ -214,6 +247,16 @@ object AgentExecution {
                     workflowStep("document_summarize", "content" to "本周工作总结：完成项目 A 交付"),
                     workflowStep("send_notification", "title" to "测试完成", "content" to "办公链跑通：写文件→摘要→通知"),
                 )
+            }
+            (q.contains("天气") || q.contains("weather") || q.contains("温度")) && !q.contains("日历") -> {
+                val city = q.replace("天气", "").replace("weather", "").replace("温度", "").replace("今天", "").replace("明天", "").trim()
+                    .ifEmpty { "北京" }
+                listOf(workflowStep("weather_current", "location" to city))
+            }
+            q.contains("翻译") -> {
+                val text = q.replace("翻译", "").replace("成中文", "").replace("成英文", "").replace("成英语", "").trim()
+                    .ifEmpty { "Hello World" }
+                listOf(workflowStep("translate_text", "text" to text, "target_lang" to "zh"))
             }
             else -> {
                 listOf(workflowStep("getDeviceInfo"))
