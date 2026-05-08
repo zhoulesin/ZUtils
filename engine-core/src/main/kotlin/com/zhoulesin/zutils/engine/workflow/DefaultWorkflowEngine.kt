@@ -3,7 +3,6 @@ package com.zhoulesin.zutils.engine.workflow
 import com.zhoulesin.zutils.engine.core.ExecutionContext
 import com.zhoulesin.zutils.engine.core.MediaType
 import com.zhoulesin.zutils.engine.core.ZResult
-import com.zhoulesin.zutils.permissions.PermissionCheck
 import com.zhoulesin.zutils.permissions.PermissionChecker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -73,23 +72,77 @@ class DefaultWorkflowEngine : WorkflowEngine {
                 break
             }
 
-            // 检查 Android 权限
-            val permCheck = permissionChecker.check(function.info.permissions)
-            if (permCheck !is PermissionCheck.OK) {
-                val msg = when (permCheck) {
-                    is PermissionCheck.NotDeclared -> "Permission '${permCheck.permission}' is not declared in AndroidManifest. Declare it first, then reload."
-                    is PermissionCheck.NotGranted -> "Permission '${permCheck.permission}' was denied by the user."
-                    else -> ""
-                }
+            // 检查 Android 权限（依据 FunctionInfo.permissions）
+            val required = function.info.permissions
+            val notDeclared = permissionChecker.notDeclaredInManifest(required)
+            if (notDeclared.isNotEmpty()) {
+                val p = notDeclared.first()
                 stepResults.add(
                     StepResult(
                         stepId = index,
                         function = step.function,
-                        result = ZResult.fail(msg, "MISSING_PERMISSION", recoverable = true),
-                    )
+                        result = ZResult.fail(
+                            message = "Permission '$p' is not declared in AndroidManifest. Declare it first, then reload.",
+                            code = "PERMISSION_NOT_DECLARED",
+                            recoverable = false,
+                        ),
+                    ),
                 )
                 allSucceeded = false
                 break
+            }
+
+            var denied = permissionChecker.declaredButNotGranted(required)
+            if (denied.isNotEmpty()) {
+                val gate = context.requestRuntimePermissions
+                if (gate == null) {
+                    val p = denied.first()
+                    stepResults.add(
+                        StepResult(
+                            stepId = index,
+                            function = step.function,
+                            result = ZResult.fail(
+                                message = "Permission '$p' was denied by the user.",
+                                code = "MISSING_PERMISSION",
+                                recoverable = true,
+                            ),
+                        ),
+                    )
+                    allSucceeded = false
+                    break
+                }
+                val accepted = gate(denied, step.function)
+                if (!accepted) {
+                    stepResults.add(
+                        StepResult(
+                            stepId = index,
+                            function = step.function,
+                            result = ZResult.fail(
+                                message = "已取消：未授予「${function.info.name}」所需系统权限，流程已停止。",
+                                code = "PERMISSION_DENIED_BY_USER",
+                                recoverable = false,
+                            ),
+                        ),
+                    )
+                    allSucceeded = false
+                    break
+                }
+                denied = permissionChecker.declaredButNotGranted(required)
+                if (denied.isNotEmpty()) {
+                    stepResults.add(
+                        StepResult(
+                            stepId = index,
+                            function = step.function,
+                            result = ZResult.fail(
+                                message = "仍未获得权限: ${denied.joinToString()}。请在系统设置中开启后重试。",
+                                code = "MISSING_PERMISSION_AFTER_PROMPT",
+                                recoverable = true,
+                            ),
+                        ),
+                    )
+                    allSucceeded = false
+                    break
+                }
             }
 
             // pipeline：将上一步的输出注入当前步骤的入参

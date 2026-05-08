@@ -35,12 +35,16 @@
 ### 模块架构
 
 ```
-engine-core/     ← 接口+数据模型+引擎 (Engine, ZFunction, Workflow...)
+engine-core/          ← 接口 + 数据模型 + 引擎 (Engine, ZFunction, Workflow…)
   ↑
-plugin-manager/  ← DEX 加载 + 版本管理 + manifest 解析
+application-shell/    ← 共享宿主（函数注册、Room、Agent 等）
   ↑
-app/             ← UI + 15 个内置函数
+app/                  ← ZUtils 演示 UI
+office-app/           ← ZOffice 产品壳（独立 UI）
+plugin-manager/       ← DEX 加载 + manifest
 ```
+
+详见 [APPLICATION_MODULES.md](APPLICATION_MODULES.md)。
 
 ## 快速开始
 
@@ -68,6 +72,7 @@ app/             ← UI + 15 个内置函数
 
 ## 文档
 
+- [APPLICATION_MODULES.md](APPLICATION_MODULES.md) — `app` / `office-app` / `application-shell` 布局
 - [PRD](PRD.md) — 产品需求文档
 - [doc/dev_records/](doc/dev_records/) — 开发记录
 - [engine-core/README.md](engine-core/README.md) — 引擎核心接口

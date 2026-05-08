@@ -37,6 +37,20 @@ class PermissionChecker(private val context: Context) {
         return PermissionCheck.OK
     }
 
+    /** 已声明但未授予的权限（含 WRITE_SETTINGS 等特殊项）。 */
+    fun declaredButNotGranted(permissions: List<String>): List<String> =
+        permissions
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && it in declaredPermissions && !isGranted(it) }
+            .distinct()
+
+    /** 未在 Manifest 声明的权限（无法通过运行时对话框修复）。 */
+    fun notDeclaredInManifest(permissions: List<String>): List<String> =
+        permissions
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && it !in declaredPermissions }
+            .distinct()
+
     private fun isGranted(permission: String): Boolean {
         if (permission == android.Manifest.permission.WRITE_SETTINGS) {
             return Settings.System.canWrite(context)

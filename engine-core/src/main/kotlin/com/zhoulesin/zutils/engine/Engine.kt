@@ -29,6 +29,7 @@ class Engine(
 
     suspend fun execute(
         workflow: Workflow,
+        requestRuntimePermissions: (suspend (deniedPermissions: List<String>, forFunction: String) -> Boolean)? = null,
     ): WorkflowResult {
         val dexLog = mutableListOf<String>()
         resolveMissingFunctions(workflow, dexLog)
@@ -36,6 +37,7 @@ class Engine(
             androidContext = androidContext,
             scope = scope,
             registry = registry,
+            requestRuntimePermissions = requestRuntimePermissions,
         )
         val result = workflowEngine.execute(workflow, context)
         return if (dexLog.isNotEmpty()) {

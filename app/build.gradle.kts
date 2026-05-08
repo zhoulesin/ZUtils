@@ -1,7 +1,6 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.google.ksp)
     alias(libs.plugins.kotlin.serialization)
 }
 
@@ -15,7 +14,7 @@ android {
 
     defaultConfig {
         applicationId = "com.zhoulesin.zutils"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
@@ -39,23 +38,10 @@ android {
     buildFeatures {
         compose = true
     }
-    sourceSets {
-        getByName("debug") {
-            java.srcDirs(
-                "build/generated/ksp/debug/kotlin",
-                "build/generated/ksp/debug/java",
-            )
-        }
-        getByName("release") {
-            java.srcDirs(
-                "build/generated/ksp/release/kotlin",
-                "build/generated/ksp/release/java",
-            )
-        }
-    }
 }
 
 dependencies {
+    implementation(project(":application-shell"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -65,20 +51,6 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.kotlinx.serialization.json)
-    implementation(project(":engine-core"))
-    implementation(project(":permissions"))
-    implementation(project(":mcp-manager"))
-    implementation(project(":ui-automation"))
-    implementation(project(":plugin-manager"))
-    implementation(project(":llm-manager"))
-    // implementation(project(":functions:calculate"))  // migrated to DEX plugin: calculator
-    implementation(project(":functions:uuid"))
-    implementation(project(":functions:time"))
-    implementation(libs.room.runtime)
-    implementation(libs.room.ktx)
-    implementation(libs.okhttp)
-    ksp(libs.room.compiler)
-    implementation(libs.androidx.work.runtime)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
