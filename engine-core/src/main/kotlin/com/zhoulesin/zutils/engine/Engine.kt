@@ -6,6 +6,7 @@ import com.zhoulesin.zutils.engine.core.ExecutionContext
 import com.zhoulesin.zutils.engine.core.FunctionInfo
 import com.zhoulesin.zutils.engine.core.FunctionRegistry
 import com.zhoulesin.zutils.engine.dex.DexLoader
+import com.zhoulesin.zutils.engine.dex.DexSpec
 import com.zhoulesin.zutils.engine.llm.LlmClient
 import com.zhoulesin.zutils.engine.registry.DefaultFunctionRegistry
 import com.zhoulesin.zutils.engine.workflow.DefaultWorkflowEngine
@@ -49,12 +50,27 @@ class Engine(
         for (step in workflow.steps) {
             if (step.type == "mcp") continue
             if (registry.contains(step.function)) continue
-            log.add("🔍 '${step.function}' not in registry, trying DEX loader...")
-            var spec = loader.resolve(step.function)
-            if (spec == null) {
-                log.add("🔄 Refreshing manifest...")
-                loader.refresh()
-                spec = loader.resolve(step.function)
+
+            // Try: Server-provided DEX metadata (new flow — server owns manifest)
+            val spec = if (step.dexUrl != null && step.className != null) {
+                DexSpec(
+                    functionName = step.function,
+                    dexUrl = step.dexUrl,
+                    className = step.className,
+                    version = "1.0",
+                    checksum = step.checksum ?: "",
+                    signature = step.signature ?: "",
+                )
+            } else {
+                // Fallback: Manifest lookup (legacy flow)
+                log.add("🔍 '${step.function}' not in registry, trying DEX loader...")
+                var s = loader.resolve(step.function)
+                if (s == null) {
+                    log.add("🔄 Refreshing manifest...")
+                    loader.refresh()
+                    s = loader.resolve(step.function)
+                }
+                s
             }
             if (spec == null) {
                 log.add("❌ No DEX found for '${step.function}'")

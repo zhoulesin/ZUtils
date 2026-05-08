@@ -23,6 +23,11 @@ data class WorkflowStep(
     val pipeline: Map<String, String> = emptyMap(),
     val type: String = "local",
     val result: String? = null,
+    // DEX plugin metadata (filled by Server when function is a DEX plugin)
+    val dexUrl: String? = null,
+    val className: String? = null,
+    val checksum: String? = null,
+    val signature: String? = null,
 )
 
 /**

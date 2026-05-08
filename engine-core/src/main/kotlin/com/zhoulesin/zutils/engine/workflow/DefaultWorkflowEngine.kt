@@ -2,9 +2,9 @@ package com.zhoulesin.zutils.engine.workflow
 
 import com.zhoulesin.zutils.engine.core.ExecutionContext
 import com.zhoulesin.zutils.engine.core.MediaType
-import com.zhoulesin.zutils.engine.core.PermissionCheck
-import com.zhoulesin.zutils.engine.core.PermissionChecker
 import com.zhoulesin.zutils.engine.core.ZResult
+import com.zhoulesin.zutils.permissions.PermissionCheck
+import com.zhoulesin.zutils.permissions.PermissionChecker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement

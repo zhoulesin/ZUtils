@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_service_description">ZOffice 智能助手，用于跨 App 自动操作</string>
+</resources>

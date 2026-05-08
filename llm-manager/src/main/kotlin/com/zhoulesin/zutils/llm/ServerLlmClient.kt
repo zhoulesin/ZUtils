@@ -119,7 +119,13 @@ class ServerLlmClient(
             val toolName = data["toolName"]?.jsonPrimitive?.contentOrNull
             if (toolName != null) {
                 val argsObj = data["toolArgs"]?.jsonObject ?: kotlinx.serialization.json.JsonObject(emptyMap())
-                ChatResult.ToolCall(toolName, argsObj)
+                val rawDexUrl = data["dexUrl"]?.jsonPrimitive?.contentOrNull
+                val dexUrl = rawDexUrl?.replace("http://localhost:8080/", "$serverBaseUrl/")
+                val className = data["className"]?.jsonPrimitive?.contentOrNull
+                val checksum = data["checksum"]?.jsonPrimitive?.contentOrNull
+                val signature = data["signature"]?.jsonPrimitive?.contentOrNull
+                val stepType = data["type"]?.jsonPrimitive?.contentOrNull ?: "local"
+                ChatResult.ToolCall(toolName, argsObj, dexUrl, className, checksum, signature, stepType)
             } else {
                 val text = data["text"]?.jsonPrimitive?.contentOrNull ?: ""
                 ChatResult.FinalAnswer(text)

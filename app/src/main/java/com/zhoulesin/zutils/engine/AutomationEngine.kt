@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.work.*
 import com.zhoulesin.zutils.data.AutomationRule
 import com.zhoulesin.zutils.data.AutomationRuleDao
+import com.zhoulesin.zutils.mcp.McpKnownTools
 import com.zhoulesin.zutils.workers.AutomationWorker
 import kotlinx.serialization.json.*
 import java.util.UUID
@@ -17,7 +18,7 @@ class AutomationEngine(
     private val json = Json { ignoreUnknownKeys = true }
 
     companion object {
-        val MCP_TOOLS = setOf("weather_current", "translate_text", "news_headlines", "geo_location", "qrcode_generate", "web_search")
+        val MCP_TOOLS: Set<String> = McpKnownTools.ALL
     }
 
     /**

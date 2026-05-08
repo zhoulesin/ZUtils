@@ -13,6 +13,7 @@ import com.zhoulesin.zutils.engine.bridge.ApiBridge
 import com.zhoulesin.zutils.engine.dex.DependencySpec
 import com.zhoulesin.zutils.engine.dex.DexLoader
 import com.zhoulesin.zutils.engine.dex.DexSpec
+import com.zhoulesin.zutils.engine.dex.DexVerifier
 import dalvik.system.DexClassLoader
 import dalvik.system.InMemoryDexClassLoader
 import kotlinx.coroutines.Dispatchers
@@ -30,6 +31,8 @@ data class ManifestDep(
     val name: String,
     val version: String,
     val dexUrl: String,
+    val checksum: String = "",
+    val signature: String = "",
 )
 
 @Serializable
@@ -49,6 +52,8 @@ data class ManifestPlugin(
     val className: String,
     val parameters: List<ManifestParam> = emptyList(),
     val dependencies: List<ManifestDep> = emptyList(),
+    val checksum: String = "",
+    val signature: String = "",
 )
 
 @Serializable
@@ -98,8 +103,10 @@ class DefaultDexLoader(
                     dexUrl = p.dexUrl,
                     className = p.className,
                     version = p.version,
+                    checksum = p.checksum,
+                    signature = p.signature,
                     dependencies = p.dependencies.map { d ->
-                        DependencySpec(name = d.name, dexUrl = d.dexUrl, version = d.version)
+                        DependencySpec(name = d.name, dexUrl = d.dexUrl, version = d.version, checksum = d.checksum, signature = d.signature)
                     },
                 )
             }.associateBy { it.functionName }
@@ -110,11 +117,20 @@ class DefaultDexLoader(
 
     override suspend fun resolve(functionName: String): DexSpec? = ensureSpecsLoaded()[functionName]
 
+    private fun resolveUrl(path: String): URL {
+        return if (path.startsWith("http://") || path.startsWith("https://")) {
+            URL(path)
+        } else {
+            URL("$remoteBaseUrl/$path")
+        }
+    }
+
     private fun readBytes(path: String): ByteArray {
+        val url = resolveUrl(path)
         return try {
-            URL("$remoteBaseUrl/$path").openStream().readBytes()
+            url.openStream().readBytes()
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to read DEX from $remoteBaseUrl/$path", e)
+            Log.e(TAG, "Failed to read DEX from $url", e)
             throw e
         }
     }
@@ -125,20 +141,40 @@ class DefaultDexLoader(
 
     override suspend fun download(spec: DexSpec): ByteArray = withContext(Dispatchers.IO) {
         val cache = cacheFile(spec)
+
+        // Try loading from cache with verification
         if (cache.exists()) {
-            Log.i(TAG, "Cache hit for ${spec.functionName} v${spec.version}")
-            return@withContext cache.readBytes()
+            val cached = cache.readBytes()
+            DexVerifier.verify(cached, spec)?.let { error ->
+                Log.w(TAG, "Cache verification failed for ${spec.functionName}: $error, re-downloading...")
+                cache.delete()
+            } ?: return@withContext cached
         }
+
         Log.i(TAG, "Downloading ${spec.functionName} v${spec.version} from ${spec.dexUrl}")
         val bytes = readBytes(spec.dexUrl)
+
+        // Verify downloaded DEX before caching
+        DexVerifier.verify(bytes, spec)?.let { error ->
+            throw SecurityException("DEX verification failed for ${spec.functionName}: $error")
+        }
+
         getCacheDir().mkdirs()
         cache.writeBytes(bytes)
         Log.i(TAG, "Cached to ${cache.name} (${bytes.size / 1024}KB)")
+
         for (dep in spec.dependencies) {
             val depCache = depCacheFile(dep)
             if (!depCache.exists()) {
                 Log.i(TAG, "Downloading dep ${dep.name} v${dep.version} from ${dep.dexUrl}")
                 val depBytes = readBytes(dep.dexUrl)
+                // Verify dependency DEX
+                DexVerifier.verify(depBytes, DexSpec(
+                    functionName = dep.name, dexUrl = dep.dexUrl, className = "",
+                    version = dep.version, checksum = dep.checksum, signature = dep.signature
+                ))?.let { error ->
+                    throw SecurityException("Dependency DEX verification failed for ${dep.name}: $error")
+                }
                 depCache.writeBytes(depBytes)
                 Log.i(TAG, "Cached dep ${depCache.name}")
             }

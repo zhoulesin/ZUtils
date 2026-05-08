@@ -8,11 +8,8 @@ import com.zhoulesin.zutils.data.DatabaseProvider
 import com.zhoulesin.zutils.engine.Engine
 import com.zhoulesin.zutils.engine.workflow.Workflow
 import com.zhoulesin.zutils.engine.workflow.WorkflowStep
+import com.zhoulesin.zutils.mcp.McpClient
 import kotlinx.serialization.json.*
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
 
 class AutomationWorker(
@@ -21,10 +18,6 @@ class AutomationWorker(
 ) : CoroutineWorker(context, params) {
 
     private val json = Json { ignoreUnknownKeys = true }
-    private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .build()
 
     override suspend fun doWork(): Result {
         val ruleId = inputData.getString("rule_id") ?: return Result.failure()
@@ -36,9 +29,10 @@ class AutomationWorker(
             val rawSteps = parseRawSteps(stepsJson)
 
             // Step 1: Execute all MCP tools via HTTP
+            val mcpClient = McpClient(baseUrl = serverUrl)
             val resolvedSteps = rawSteps.map { step ->
                 if (step.type == "mcp" && step.result == null) {
-                    val mcpResult = callMcpTool(serverUrl, step.function, step.args)
+                    val mcpResult = mcpClient.callTool(step.function, step.args)
                     step.copy(result = mcpResult)
                 } else {
                     step
@@ -57,22 +51,6 @@ class AutomationWorker(
             Log.e("ZUtils-Auto", "Automation failed: rule=$ruleId", e)
             Result.retry()
         }
-    }
-
-    private suspend fun callMcpTool(serverUrl: String, tool: String, args: JsonObject): String {
-        val bodyJson = buildJsonObject {
-            put("tool", tool)
-            put("arguments", args)
-        }
-        val request = Request.Builder()
-            .url("$serverUrl/api/v1/mcp/call")
-            .post(bodyJson.toString().toRequestBody("application/json".toMediaType()))
-            .build()
-        val response = httpClient.newCall(request).execute()
-        val body = response.body?.string() ?: return "Error: empty response"
-        val root = json.parseToJsonElement(body).jsonObject
-        val data = root["data"]?.jsonObject ?: return "Error: no data"
-        return data["output"]?.jsonPrimitive?.contentOrNull ?: "Error: no output"
     }
 
     private fun parseRawSteps(stepsJson: String): List<WorkflowStep> {

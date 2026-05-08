@@ -66,9 +66,12 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.kotlinx.serialization.json)
     implementation(project(":engine-core"))
+    implementation(project(":permissions"))
+    implementation(project(":mcp-manager"))
+    implementation(project(":ui-automation"))
     implementation(project(":plugin-manager"))
     implementation(project(":llm-manager"))
-    implementation(project(":functions:calculate"))
+    // implementation(project(":functions:calculate"))  // migrated to DEX plugin: calculator
     implementation(project(":functions:uuid"))
     implementation(project(":functions:time"))
     implementation(libs.room.runtime)

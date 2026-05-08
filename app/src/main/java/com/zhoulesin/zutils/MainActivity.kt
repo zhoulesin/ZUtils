@@ -7,8 +7,6 @@ import android.os.Bundle
 import android.provider.Settings
 import android.util.Base64
 import android.util.Log
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.toRequestBody
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -48,6 +46,7 @@ import com.zhoulesin.zutils.ui.screen.CapabilitiesScreen
 import com.zhoulesin.zutils.ui.screen.AutomationRulesScreen
 import com.zhoulesin.zutils.ui.screen.WorkflowBuilderScreen
 import com.zhoulesin.zutils.config.ServerConfig
+import com.zhoulesin.zutils.mcp.McpClient
 import com.zhoulesin.zutils.ui.theme.RaycastBorder
 import com.zhoulesin.zutils.ui.theme.RaycastWhite
 import com.zhoulesin.zutils.ui.theme.RaycastWhiteBorder06
@@ -57,9 +56,7 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import com.zhoulesin.zutils.ui.theme.ZUtilsTheme
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -110,13 +107,8 @@ class MainActivity : ComponentActivity() {
                 }
             },
         ).also {
-            // it.registry.register(CalculateFunction())  // 使用云端插件测试
             it.registry.register(GetCurrentTimeFunction())
-            it.registry.register(GetBatteryLevelFunction())
-            it.registry.register(SetScreenBrightnessFunction())
             it.registry.register(GetDeviceInfoFunction())
-            it.registry.register(GetVolumeFunction())
-            it.registry.register(SetVolumeFunction())
             it.registry.register(SetClipboardFunction())
             it.registry.register(GetClipboardFunction())
             it.registry.register(GetScreenInfoFunction())
@@ -124,6 +116,11 @@ class MainActivity : ComponentActivity() {
             it.registry.register(GetNetworkTypeFunction())
             it.registry.register(SendNotificationFunction())
             it.registry.register(CreateAutomationFunction(autoEngine))
+            it.registry.register(CreateCalendarEventFunction())
+            it.registry.register(QueryContactsFunction())
+            it.registry.register(ReadFileFunction())
+            it.registry.register(WriteFileFunction())
+            it.registry.register(ShareFileFunction())
         }
 
         // Reschedule all enabled automation rules on startup
@@ -506,10 +503,18 @@ private suspend fun runQuery(
 
     val messages = mutableListOf(ChatMessage(role = "user", content = query))
     val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
-    val httpClient = okhttp3.OkHttpClient.Builder()
-        .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
-        .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-        .build()
+    val mcpClient = McpClient()
+
+    val mcpFunctionInfos = listOf(
+        FunctionInfo("email_send", "发送邮件到指定收件人",
+            listOf(Parameter("to", "收件人邮箱", ParameterType.STRING, required = true),
+                   Parameter("subject", "邮件主题", ParameterType.STRING, required = true),
+                   Parameter("body", "邮件正文", ParameterType.STRING, required = true)),
+            source = FunctionSource.REMOTE),
+        FunctionInfo("document_summarize", "对文档内容进行摘要总结",
+            listOf(Parameter("content", "文档文本内容", ParameterType.STRING, required = true)),
+            source = FunctionSource.REMOTE),
+    )
 
     var turn = 0
     var maxTurns = 10
@@ -518,7 +523,8 @@ private suspend fun runQuery(
         push("")
         push("── 第 ${turn} 轮 ──")
         push("💭 思考中...")
-        val result = llmClient.chat(messages, engine.getAllAvailableInfos())
+        val allFuncs = engine.getAllAvailableInfos() + mcpFunctionInfos
+        val result = llmClient.chat(messages, allFuncs)
 
         when (result) {
             is ChatResult.ToolCall -> {
@@ -527,10 +533,27 @@ private suspend fun runQuery(
                 push("🔧 调用: $fn")
                 if (argsStr.length < 100) push("   参数: $argsStr")
 
-                val output = if (fn in com.zhoulesin.zutils.engine.AutomationEngine.MCP_TOOLS) {
-                    executeMcpCall(httpClient, json, fn, result.args)
+                val output = if (fn in com.zhoulesin.zutils.mcp.McpKnownTools.ALL) {
+                    mcpClient.callTool(fn, result.args)
                 } else {
-                    runLocalFunction(engine, fn, result.args)
+                    val step = WorkflowStep(
+                        id = 0,
+                        function = fn,
+                        args = result.args,
+                        type = result.type,
+                        dexUrl = result.dexUrl,
+                        className = result.className,
+                        checksum = result.checksum,
+                        signature = result.signature,
+                    )
+                    val workflow = Workflow(steps = listOf(step))
+                    val wfResult = engine.execute(workflow)
+                    val stepResult = wfResult.steps.firstOrNull()
+                    when (val r = stepResult?.result) {
+                        is ZResult.Success -> r.toDisplayText
+                        is ZResult.Error -> "执行失败: ${r.message}"
+                        else -> "无结果"
+                    }
                 }
                 push("✅ 结果: ${output.take(150)}${if (output.length > 150) "…" else ""}")
                 messages.add(ChatMessage(role = "user",
@@ -552,71 +575,24 @@ private suspend fun runQuery(
     return ResultContent.Text(logs.toString())
 }
 
-private suspend fun runLocalFunction(
-    engine: Engine, function: String, args: kotlinx.serialization.json.JsonObject,
-): String {
-    val step = com.zhoulesin.zutils.engine.workflow.WorkflowStep(id = 0, function = function, args = args, type = "local")
-    val workflow = com.zhoulesin.zutils.engine.workflow.Workflow(steps = listOf(step))
-    val result = engine.execute(workflow)
-    val stepResult = result.steps.firstOrNull()
-    return when (val r = stepResult?.result) {
-        is com.zhoulesin.zutils.engine.core.ZResult.Success -> r.data.toString()
-        is com.zhoulesin.zutils.engine.core.ZResult.Error -> "执行失败: ${r.message}"
-        else -> "无结果"
-    }
-}
-
-private suspend fun executeMcpCall(
-    client: okhttp3.OkHttpClient,
-    json: kotlinx.serialization.json.Json,
-    function: String,
-    args: kotlinx.serialization.json.JsonObject,
-): String = withContext(Dispatchers.IO) {
-    val bodyJson = kotlinx.serialization.json.buildJsonObject {
-        put("tool", function)
-        put("arguments", args)
-    }
-    val request = okhttp3.Request.Builder()
-        .url("${ServerConfig.DEFAULT_BASE_URL}/api/v1/mcp/call")
-        .post(bodyJson.toString().toRequestBody("application/json".toMediaType()))
-        .build()
-    val response = client.newCall(request).execute()
-    val body = response.body?.string() ?: ""
-    val root = json.parseToJsonElement(body).jsonObject
-    root["data"]?.jsonObject?.get("output")?.jsonPrimitive?.contentOrNull ?: body
-}
-
 private fun parseQuery(query: String): Workflow {
     val q = query.lowercase().trim()
 
     val steps = when {
-        q.startsWith("计算") || q.startsWith("calc") || q.matches(Regex("^[\\d+\\-*/().\\s]+$")) -> {
-            val expr = if (q.matches(Regex("^[\\d+\\-*/().\\s]+$"))) q
-            else q.replace(Regex("^计算|^calc[a-z]*\\s*", RegexOption.IGNORE_CASE), "").trim()
-                .ifEmpty { "0" }
-            listOf(step("calculate", "expression" to expr))
-        }
         q.contains("时间") || q.contains("几点") || q.contains("time") -> {
             listOf(step("getCurrentTime", "format" to "yyyy-MM-dd HH:mm:ss"))
-        }
-        q.contains("电量") || q.contains("电池") || q.contains("battery") -> {
-            listOf(step("getBatteryLevel"))
-        }
-        q.contains("亮度") || q.contains("brightness") -> {
-            val level = Regex("""(\d+)""").find(q)?.groupValues?.get(1)?.toIntOrNull()
-                ?: 50
-            listOf(step("setScreenBrightness", "level" to level.toString()))
         }
         q.contains("设备") || q.contains("device") || q.contains("手机信息") -> {
             listOf(step("getDeviceInfo"))
         }
         q.contains("音量") || q.contains("volume") -> {
-            val level = Regex("""(\d+)""").find(q)?.groupValues?.get(1)?.toIntOrNull()
-            if (level != null) {
-                listOf(step("setVolume", "level" to level.toString()))
-            } else {
-                listOf(step("getVolume"))
-            }
+            listOf(step("系统音量功能已移除，可通过 DEX 插件获取"))
+        }
+        q.contains("电量") || q.contains("电池") || q.contains("battery") -> {
+            listOf(step("系统电量功能已移除，可通过 DEX 插件获取"))
+        }
+        q.contains("亮度") || q.contains("brightness") -> {
+            listOf(step("屏幕亮度功能已移除，可通过 DEX 插件获取"))
         }
         q.contains("剪贴板") || q.contains("clipboard") -> {
             if (q.contains("复制") || q.contains("写入") || q.contains("set")) {
@@ -638,19 +614,8 @@ private fun parseQuery(query: String): Workflow {
         }
         q.contains("连续") || q.contains("然后") -> {
             mutableListOf<WorkflowStep>().apply {
-                if (q.contains("计算") || q.contains("calc")) {
-                    val m = Regex("""计算\s*([\d+\-*/().\s]+)""").find(query)
-                    val expr = m?.groupValues?.get(1)?.trim() ?: "1+1"
-                    add(step("calculate", "expression" to expr))
-                }
                 if (q.contains("时间") || q.contains("time")) {
                     add(step("getCurrentTime"))
-                }
-                if (q.contains("电量")) {
-                    add(step("getBatteryLevel"))
-                }
-                if (q.contains("音量")) {
-                    add(step("getVolume"))
                 }
                 if (q.contains("网络")) {
                     add(step("getNetworkType"))
@@ -661,6 +626,31 @@ private fun parseQuery(query: String): Workflow {
 
                 if (isEmpty()) add(step("getDeviceInfo"))
             }
+        }
+        q.contains("通讯录") || q.contains("联系人") || q.contains("找") -> {
+            val name = q.replace("通讯录", "").replace("联系人", "").replace("找", "").replace("查", "").trim()
+                .ifEmpty { " " }
+            listOf(step("queryContacts", "name" to name))
+        }
+        q.contains("日历") || q.contains("日程") || q.contains("会议") || q.contains("提醒") -> {
+            val title = q.replace("日历", "").replace("日程", "").replace("会议", "").replace("提醒", "").trim()
+                .let { if (it.length > 2) it else "新建日程" }
+            listOf(step("createCalendarEvent", "title" to title))
+        }
+        q.contains("写") && (q.contains("文件") || q.contains("笔记") || q.contains("文档") || q.contains("保存")) -> {
+            val content = q.replace("写", "").replace("文件", "").replace("笔记", "").replace("保存", "").trim()
+            listOf(step("writeFile", "content" to content))
+        }
+        q.contains("读取") || q.contains("打开文件") || q.contains("读文件") -> {
+            listOf(step("readFile", "path" to "/storage/emulated/0/Download/note.txt"))
+        }
+        q.contains("办公测试") || q.contains("office test") -> {
+            listOf(
+                step("writeFile", "content" to "本周完成项目 A 的交付，团队协作顺畅。下周计划启动项目 B。"),
+                step("readFile", "path" to ""),  // path 空时会读刚写入的
+                step("document_summarize", "content" to "本周工作总结：完成项目 A 交付"),
+                step("send_notification", "title" to "测试完成", "content" to "办公链跑通：写文件→摘要→通知"),
+            )
         }
         else -> {
             listOf(step("getDeviceInfo"))

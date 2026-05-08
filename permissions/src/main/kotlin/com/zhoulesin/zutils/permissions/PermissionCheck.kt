@@ -1,4 +1,4 @@
-package com.zhoulesin.zutils.engine.core
+package com.zhoulesin.zutils.permissions
 
 sealed interface PermissionCheck {
     data object OK : PermissionCheck

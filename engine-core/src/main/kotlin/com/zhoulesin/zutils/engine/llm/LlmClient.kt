@@ -10,7 +10,15 @@ data class ChatMessage(
 )
 
 sealed class ChatResult {
-    data class ToolCall(val function: String, val args: kotlinx.serialization.json.JsonObject) : ChatResult()
+    data class ToolCall(
+        val function: String,
+        val args: kotlinx.serialization.json.JsonObject,
+        val dexUrl: String? = null,
+        val className: String? = null,
+        val checksum: String? = null,
+        val signature: String? = null,
+        val type: String = "local",
+    ) : ChatResult()
     data class FinalAnswer(val text: String) : ChatResult()
     data class Error(val message: String) : ChatResult()
 }

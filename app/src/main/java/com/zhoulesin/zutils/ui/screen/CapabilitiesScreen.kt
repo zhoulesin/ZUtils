@@ -12,18 +12,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.zhoulesin.zutils.engine.core.FunctionInfo
+import com.zhoulesin.zutils.mcp.McpClient
 import com.zhoulesin.zutils.ui.theme.RaycastBlueTransparent
 import com.zhoulesin.zutils.ui.theme.RaycastCardSurface
 import com.zhoulesin.zutils.ui.theme.RaycastWhite
 import com.zhoulesin.zutils.ui.theme.RaycastWhiteBorder06
 import com.zhoulesin.zutils.ui.theme.RaycastWhiteBorder08
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 
 data class SkillItem(
     val id: String, val name: String, val description: String, val icon: String,
@@ -42,9 +36,7 @@ private val SKILLS = listOf(
 private val FUNCTION_CATEGORIES: Map<String, String> = mapOf(
     "send_notification" to "通知", "toast" to "通知",
     "create_automation" to "自动化",
-    "getCurrentTime" to "系统", "getBatteryLevel" to "系统",
-    "setScreenBrightness" to "系统", "getDeviceInfo" to "系统",
-    "getVolume" to "系统", "setVolume" to "系统",
+    "getCurrentTime" to "系统", "getDeviceInfo" to "系统",
     "getNetworkType" to "系统", "getStorageInfo" to "系统", "getScreenInfo" to "系统",
     "setClipboard" to "剪贴板", "getClipboard" to "剪贴板",
 )
@@ -52,9 +44,7 @@ private val FUNCTION_CATEGORIES: Map<String, String> = mapOf(
 private val FUNCTION_ICONS: Map<String, String> = mapOf(
     "send_notification" to "🔔", "toast" to "💬",
     "create_automation" to "⏰",
-    "getCurrentTime" to "🕐", "getBatteryLevel" to "🔋",
-    "setScreenBrightness" to "☀️", "getDeviceInfo" to "📱",
-    "getVolume" to "🔊", "setVolume" to "🔉",
+    "getCurrentTime" to "🕐", "getDeviceInfo" to "📱",
     "getNetworkType" to "📶", "getStorageInfo" to "💾", "getScreenInfo" to "🖥️",
     "setClipboard" to "📋", "getClipboard" to "📄",
 )
@@ -77,22 +67,8 @@ fun CapabilitiesScreen(
     var mcpTools by remember { mutableStateOf<List<McpToolItem>>(emptyList()) }
 
     LaunchedEffect(serverBaseUrl) {
-        try {
-            val json = Json { ignoreUnknownKeys = true }
-            val result = withContext(Dispatchers.IO) {
-                val url = java.net.URL("$serverBaseUrl/api/v1/mcp/tools")
-                url.readText()
-            }
-            val root = json.parseToJsonElement(result).jsonObject
-            val items = root["data"]?.jsonArray?.map { el ->
-                val obj = el.jsonObject
-                McpToolItem(
-                    name = obj["name"]?.jsonPrimitive?.contentOrNull ?: "",
-                    description = obj["description"]?.jsonPrimitive?.contentOrNull ?: "",
-                )
-            } ?: emptyList()
-            mcpTools = items
-        } catch (_: Exception) {}
+        val client = McpClient(baseUrl = serverBaseUrl)
+        mcpTools = client.listTools().map { McpToolItem(name = it.name, description = it.description) }
     }
 
     Column(modifier = modifier.fillMaxSize().padding(16.dp)) {

@@ -43,32 +43,21 @@ private fun pipelineStep(name: String, pipeline: Map<String, String>, vararg arg
 }
 
 private val sequentialWorkflows = listOf(
-    WorkflowTemplate("系统诊断", "设备信息 + 电量 + 网络 + 存储", "🔍", WorkflowType.SEQUENTIAL,
+    WorkflowTemplate("系统诊断", "设备信息 + 网络 + 存储 + 屏幕", "🔍", WorkflowType.SEQUENTIAL,
         build = { Workflow(listOf(
-            step("getDeviceInfo"), step("getBatteryLevel"), step("getNetworkType"), step("getStorageInfo"),
+            step("getDeviceInfo"), step("getNetworkType"), step("getStorageInfo"), step("getScreenInfo"),
         ), summary = "系统诊断") },
-    ),
-    WorkflowTemplate("音量与亮度", "查看音量 → 设音量70% → 提示", "🔊", WorkflowType.SEQUENTIAL,
-        build = { Workflow(listOf(
-            step("getVolume"), step("setVolume", "level" to "70"), step("toast", "message" to "音量已设为70%"),
-        ), summary = "音量配置") },
     ),
     WorkflowTemplate("开发工具箱", "UUID → 时间 → Base64 编码", "🛠", WorkflowType.SEQUENTIAL,
         build = { Workflow(listOf(
             step("uuid"), step("getCurrentTime"), step("base64", "action" to "encode", "text" to "Hello ZUtils"),
         ), summary = "开发工具") },
     ),
-    WorkflowTemplate("设备全景", "时间 + 设备 + 电量 + 存储 + 网络 + 屏幕", "📊", WorkflowType.SEQUENTIAL,
+    WorkflowTemplate("设备全景", "时间 + 设备 + 存储 + 网络 + 屏幕", "📊", WorkflowType.SEQUENTIAL,
         build = { Workflow(listOf(
-            step("getCurrentTime"), step("getDeviceInfo"), step("getBatteryLevel"),
+            step("getCurrentTime"), step("getDeviceInfo"),
             step("getStorageInfo"), step("getNetworkType"), step("getScreenInfo"),
         ), summary = "设备全景") },
-    ),
-    WorkflowTemplate("快捷配置", "音量50% → 亮度80% → 提示", "🎛", WorkflowType.SEQUENTIAL,
-        build = { Workflow(listOf(
-            step("setVolume", "level" to "50"), step("setScreenBrightness", "level" to "80"),
-            step("toast", "message" to "音量50% 亮度80%"),
-        ), summary = "快捷配置") },
     ),
 )
 
@@ -77,11 +66,6 @@ private val pipelineWorkflows = listOf(
         build = { Workflow(listOf(
             step("getCurrentTime"), pipelineStep("toast", pipeline = mapOf("message" to "{0}")),
         ), summary = "时间通知") },
-    ),
-    WorkflowTemplate("电量通知", "获取电量 → 显示为 Toast", "🔋", WorkflowType.PIPELINE,
-        build = { Workflow(listOf(
-            step("getBatteryLevel"), pipelineStep("toast", pipeline = mapOf("message" to "{0}")),
-        ), summary = "电量通知") },
     ),
     WorkflowTemplate("设备名提示", "获取设备名称 → 显示为 Toast", "📱", WorkflowType.PIPELINE,
         build = { Workflow(listOf(

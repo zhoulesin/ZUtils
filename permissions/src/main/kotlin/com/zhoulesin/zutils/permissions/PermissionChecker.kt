@@ -1,4 +1,4 @@
-package com.zhoulesin.zutils.engine.core
+package com.zhoulesin.zutils.permissions
 
 import android.content.Context
 import android.content.pm.PackageManager
@@ -38,7 +38,6 @@ class PermissionChecker(private val context: Context) {
     }
 
     private fun isGranted(permission: String): Boolean {
-        // Special permissions need their own checks
         if (permission == android.Manifest.permission.WRITE_SETTINGS) {
             return Settings.System.canWrite(context)
         }

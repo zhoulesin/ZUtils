@@ -25,10 +25,13 @@ dependencyResolutionManagement {
 rootProject.name = "ZUtils"
 include(":app")
 include(":engine-core")
+include(":permissions")
+include(":mcp-manager")
+include(":ui-automation")
 include(":plugin-manager")
 include(":llm-manager")
 // include(":functions:qrcode")  // migrated to server MCP tool: qrcode_generate
-include(":functions:calculate")
+// include(":functions:calculate")  // migrated to DEX plugin: calculator
 include(":functions:uuid")
 include(":functions:time")
 include(":functions:weather")

@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.zhoulesin.zutils.engine.core"
+    namespace = "com.zhoulesin.zutils.mcp"
     compileSdk = 36
 
     defaultConfig {
@@ -13,8 +13,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":engine-core"))
     implementation(libs.kotlinx.serialization.json)
-    implementation(libs.androidx.core.ktx)
-    implementation(project(":permissions"))
-    api("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.1")
+    implementation(libs.okhttp)
 }
