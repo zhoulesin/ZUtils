@@ -145,12 +145,18 @@ class Engine(
         return result
     }
 
+    /** 仅返回本地函数（BUILT_IN + USER_DEFINED），用于传给 Server LLM。
+     *  MCP 和 DEX 由 Server 端自行维护，不依赖 Android 传递。 */
+    suspend fun getLocalOnlyInfos(): List<FunctionInfo> {
+        return registry.getAllInfos().filter { it.source == FunctionSource.BUILT_IN || it.source == FunctionSource.USER_DEFINED }
+    }
+
     suspend fun executeWithLlm(
         userInput: String,
     ): WorkflowResult {
         val client = llmClient
             ?: throw IllegalStateException("LlmClient not configured")
-        val workflow = client.parseIntent(userInput, getAllAvailableInfos())
+        val workflow = client.parseIntent(userInput, getLocalOnlyInfos())
         return execute(workflow)
     }
 }

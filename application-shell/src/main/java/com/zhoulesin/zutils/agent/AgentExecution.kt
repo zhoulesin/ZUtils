@@ -33,7 +33,7 @@ object AgentExecution {
         }
 
         push("💭 正在解析意图...")
-        val workflow = llmClient.parseIntent(query, engine.getAllAvailableInfos())
+        val workflow = llmClient.parseIntent(query, engine.getLocalOnlyInfos())
 
         if (workflow.steps.isEmpty()) {
             val msg = workflow.summary ?: "未能解析意图"
