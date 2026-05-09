@@ -6,12 +6,12 @@
 
 ## 项目定位
 
-用户用自然语言描述需求，AI 拆解为工作链（Workflow），顺序调用函数执行。若函数缺失，通过 DEX 动态加载补全。
+用户用自然语言描述需求，AI 拆解为工作链（Workflow），顺序调用函数执行。步骤间通过 pipeline 机制传递数据。若函数缺失，通过 DEX 动态加载补全。
 
 ```
-用户需求 → LLM 解析 / 关键词匹配 → Workflow → 顺序调用函数 → 返回结果
-                                                 ↓ (函数缺失)
-                                            DEX 热加载 → 继续执行
+用户需求 → LLM 两轮解析 → Workflow（含 pipeline） → 顺序调用 → 返回结果
+                    Round1: 选函数                        ↓ (函数缺失)
+                    Round2: 填参数                   DEX 热加载 → 继续执行
 ```
 
 ## 模块架构
@@ -42,6 +42,40 @@ application-shell                   ← 共享宿主（函数注册、Room、Age
 | **mcp** | McpClient.callTool() → 服务器 MCP 执行 | `weather_current`, `translate_text` |
 | **tool** | DexLoader 下载 DEX → 签名校验 → 注册 → 执行 | 市场插件（calculate 等） |
 
+## LLM 两轮解析
+
+Server 端 `parseIntent` 采用两轮 LLM 调用，降低 token 消耗并提升准确性：
+
+```
+Round 1（意图分类）              Round 2（参数填充）
+  输入: 用户原始输入               输入: 用户原始输入
+  Prompt: 函数名+一句话描述        Prompt: 选中函数的完整参数 schema
+  输出: JSON（选了哪些函数）       输出: JSON（每个函数的完整参数）
+  Token: ~400                     Token: ~800
+```
+
+Round 1 失败时自动回退到单轮模式（全部函数 + tool_calls）。
+
+## Pipeline 步骤间数据传递
+
+步骤间通过 `pipeline` 字段传递数据，由 `PipelineResolver` 在执行时解析：
+
+```json
+{
+  "steps": [
+    {"function": "news_headlines", "args": {"category": "科技"}},
+    {"function": "translate_text", "args": {"target_lang": "zh"},
+     "pipeline": {"text": "{0.result}"}}
+  ]
+}
+```
+
+- `{0.result}` — 引用 step 0 的完整执行结果
+- `{0.result.title}` — 导航到 JSON 子字段
+- `PipelineResolver` 在执行前将表达式解析为实际值，合并到 step 的 args 中
+
+Server 端通过 `ParamDef.pipelineSource` 声明哪些参数可接受上游结果（如 `"previous_step_result"`），自动生成 pipeline 映射。
+
 ## 核心引擎（engine-core）
 
 `engine-core` 是所有模块的唯一下游依赖，包含接口定义、数据模型和执行引擎。
@@ -62,10 +96,11 @@ com.zhoulesin.zutils.engine/
 │   ├── PermissionCheck.kt       # 权限检查结果
 │   └── PermissionChecker.kt     # 权限检查器
 ├── workflow/                    # 工作流引擎
-│   ├── Workflow.kt              # Workflow + WorkflowStep
+│   ├── Workflow.kt              # Workflow + WorkflowStep（含 pipeline 字段）
 │   ├── WorkflowResult.kt        # 执行结果
 │   ├── WorkflowEngine.kt        # 接口
-│   └── DefaultWorkflowEngine.kt # 顺序/管道执行
+│   ├── DefaultWorkflowEngine.kt # 顺序执行 + pipeline 数据注入
+│   └── PipelineResolver.kt     # 解析 {N.result} 表达式
 ├── dex/                         # 动态加载接口
 │   ├── DexLoader.kt             # 加载接口
 │   └── DexSpec.kt               # DEX 规格 + DependencySpec
