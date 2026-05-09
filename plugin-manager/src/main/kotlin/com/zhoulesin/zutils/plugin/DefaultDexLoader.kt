@@ -83,7 +83,7 @@ class DefaultDexLoader(
         }
         return synchronized(mutex) {
             specMap?.let { return@synchronized it }
-            val manifest = Json.decodeFromString<DexManifest>(json)
+            val manifest = Json { ignoreUnknownKeys = true }.decodeFromString<DexManifest>(json)
             val map = manifest.plugins.map { p ->
                 Log.i(TAG, "Manifest plugin: ${p.functionName} description='${p.description}' params=${p.parameters.size}")
                 for (mp in p.parameters) {
