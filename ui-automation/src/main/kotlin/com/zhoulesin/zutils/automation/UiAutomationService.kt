@@ -10,7 +10,7 @@ import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 
-class UiAutomationService : AccessibilityService() {
+open class UiAutomationService : AccessibilityService() {
 
     companion object {
         private const val TAG = "ZUtils-UI-Auto"
@@ -28,11 +28,11 @@ class UiAutomationService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event != null) {
-            Log.i(TAG, "onAccessibilityEvent: type=${event.eventType} pkg=${event.packageName}")
+//            Log.i(TAG, "onAccessibilityEvent: type=${event.eventType} pkg=${event.packageName}")
             val pending = pendingWindowPackage
             if (pending != null && event.packageName?.toString() == pending) {
                 pendingWindowPackage = null
-                Log.i(TAG, "onAccessibilityEvent: matched pending '$pending'")
+//                Log.i(TAG, "onAccessibilityEvent: matched pending '$pending'")
             }
         }
     }
@@ -57,13 +57,29 @@ class UiAutomationService : AccessibilityService() {
         nodes.forEachIndexed { i, n ->
             val r = android.graphics.Rect()
             n.getBoundsInScreen(r)
-            Log.i(TAG, "  [$i] text='${n.text}' contentDesc='${n.contentDescription}' className='${n.className}' clickable=${n.isClickable} bounds=$r")
+            Log.i(TAG, "  [$i] text='${n.text}' desc='${n.contentDescription}' class='${n.className}' clickable=${n.isClickable} bounds=$r")
         }
-        val clickable = nodes.firstOrNull { it.isClickable } ?: nodes.firstOrNull()
-        val clicked = clickable?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true
-        Log.i(TAG, "clickByText($text): clicked=${clicked}, chosen text='${clickable?.text}' desc='${clickable?.contentDescription}'")
+        // 1. Try performAction on clickable node
+        val clickable = nodes.firstOrNull { it.isClickable }
+        if (clickable != null) {
+            val clicked = clickable.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            Log.i(TAG, "clickByText($text): performAction → $clicked")
+            if (clicked) { allNodes.forEach { it.recycle() }; return true }
+        }
+        // 2. Fallback: coordinate tap on first exact-match node
+        val target = exactNodes.firstOrNull() ?: nodes.firstOrNull()
+        if (target != null) {
+            val rect = Rect()
+            target.getBoundsInScreen(rect)
+            val cx = rect.centerX().toFloat()
+            val cy = rect.centerY().toFloat()
+            Log.i(TAG, "clickByText($text): tap fallback at ($cx, $cy)")
+            tap(cx, cy)
+            allNodes.forEach { it.recycle() }
+            return true
+        }
         allNodes.forEach { it.recycle() }
-        return clicked
+        return false
     }
 
     fun clickByContentDesc(desc: String): Boolean {
@@ -76,35 +92,71 @@ class UiAutomationService : AccessibilityService() {
         return clicked
     }
 
+    /**
+     * 递归遍历查找可点击节点：匹配 text / contentDescription / viewIdResourceName。
+     * 兜底方案，用于 findAccessibilityNodeInfosByText 找不到的情况。
+     */
+    fun clickByTraversal(keyword: String): Boolean {
+        val root = rootInActiveWindow ?: return false
+        val found = traverseAndFind(root, keyword)
+        val clicked = found?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true
+        Log.i(TAG, "clickByTraversal($keyword): found=${found != null}, clicked=$clicked")
+        root.recycle()
+        return clicked
+    }
+
+    private fun traverseAndFind(node: AccessibilityNodeInfo, keyword: String): AccessibilityNodeInfo? {
+        if (node.isClickable) {
+            val desc = node.contentDescription?.toString() ?: ""
+            val text = node.text?.toString() ?: ""
+            val viewId = node.viewIdResourceName ?: ""
+
+            if (desc.contains(keyword, ignoreCase = true) ||
+                text.contains(keyword, ignoreCase = true)) {
+                Log.i(TAG, "traverseAndFind: matched by text/desc '$keyword' on ${node.className}")
+                return node
+            }
+            if (viewId.contains("search", ignoreCase = true) ||
+                viewId.contains("menu", ignoreCase = true)) {
+                Log.i(TAG, "traverseAndFind: matched by viewId '$viewId' on ${node.className}")
+                return node
+            }
+        }
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            val result = traverseAndFind(child, keyword)
+            if (result != null) return result
+            child.recycle()
+        }
+        return null
+    }
+
     fun inputText(target: String, value: String): Boolean {
         var focused = findFocusedEditable()
         Log.i(TAG, "inputText: focused=$focused")
         if (focused == null) {
             val editable = findEditableOnScreen(target)
             Log.i(TAG, "inputText: editableOnScreen($target)=$editable")
-            if (editable == null) {
+            if (editable != null) {
+                // Found an EditText on screen — focus it and use it
+                editable.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+                focused = editable
+                Log.i(TAG, "inputText: focused on found editable")
+            } else {
                 if (target.isNotEmpty()) {
                     val clicked = clickByText(target)
                     Log.i(TAG, "inputText: clickByText($target)=$clicked")
                     if (!clicked) return false
                 }
+                // Retry: wait for EditText to appear after click
                 for (attempt in 1..3) {
                     Thread.sleep(500)
                     focused = findFocusedEditable()
                     Log.i(TAG, "inputText: retry $attempt, focused=$focused")
                     if (focused != null) break
-                    // Also try finding any editable on screen (not just focused)
-                    val anyEdit = findEditableOnScreen("")
-                    if (anyEdit != null) {
-                        Log.i(TAG, "inputText: found un-focused editable, clicking to focus")
-                        anyEdit.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
-                        focused = anyEdit
-                        break
-                    }
                 }
             }
         }
-        if (focused == null) focused = findFocusedEditable()
         Log.i(TAG, "inputText: after focus, focused=$focused")
         val node = focused ?: return false
         val args = Bundle().apply {
@@ -184,13 +236,44 @@ class UiAutomationService : AccessibilityService() {
         return text
     }
 
+    /**
+     * Dump 整棵无障碍树，打印所有节点的属性。用于调试。
+     * Logcat 过滤 TAG="ZUtils-UI-Auto" 即可查看。
+     */
+    fun dumpNodeTree() {
+        val root = rootInActiveWindow
+        if (root == null) {
+            Log.i(TAG, "dumpNodeTree: rootInActiveWindow=null")
+            return
+        }
+        Log.i(TAG, "dumpNodeTree: === START pkg=${root.packageName} childCount=${root.childCount} ===")
+        dumpNode(root, 0)
+        Log.i(TAG, "dumpNodeTree: === END ===")
+        root.recycle()
+    }
+
+    private fun dumpNode(node: AccessibilityNodeInfo, depth: Int) {
+        val indent = "  ".repeat(depth)
+        val r = Rect()
+        node.getBoundsInScreen(r)
+        Log.i(TAG, "${indent}[${node.className}] " +
+            "text='${node.text}' desc='${node.contentDescription}' " +
+            "viewId='${node.viewIdResourceName}' " +
+            "clickable=${node.isClickable} editable=${node.isEditable} " +
+            "focusable=${node.isFocusable} " +
+            "bounds=$r children=${node.childCount}")
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            dumpNode(child, depth + 1)
+            child.recycle()
+        }
+    }
+
     fun tap(x: Float, y: Float): Boolean {
         val path = Path().apply { moveTo(x, y) }
         val gesture = GestureDescription.Builder()
             .addStroke(GestureDescription.StrokeDescription(path, 0, 1))
             .build()
-        val lock = Object()
-        var success = false
         dispatchGesture(gesture, null, null)
         Thread.sleep(200)
         return true

@@ -65,14 +65,21 @@ class UiAutomationEngine {
             service.clickByContentDesc(step.target)
         }
         UiStep.TAP_SEND -> {
-            service.clickByText("发送") || service.clickByContentDesc("发送")
+            service.clickByText("发送") ||
+                service.clickByContentDesc("发送") ||
+                service.clickByTraversal("发送")
         }
         UiStep.TAP_ATTACH -> {
             service.clickByText("更多") || service.clickByText("附件") ||
                 service.clickByText("+")
         }
         UiStep.TAP_SEARCH -> {
-            service.clickByText("搜索") || service.clickByText("Search")
+            service.clickByContentDesc("搜索") ||
+                service.clickByContentDesc("Search") ||
+                service.clickByText("搜索") ||
+                service.clickByText("Search") ||
+                service.clickByTraversal("搜索") ||
+                service.clickByTraversal("search")
         }
         else -> {
             Log.w(TAG, "Unknown action: ${step.action}")
