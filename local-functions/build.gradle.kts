@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.zhoulesin.zutils.engine.core"
+    namespace = "com.zhoulesin.zutils.functions"
     compileSdk = 36
 
     defaultConfig {
@@ -13,7 +13,7 @@ android {
 }
 
 dependencies {
-    implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.core.ktx)
-    api("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.1")
+    implementation(libs.kotlinx.serialization.json)
+    api(project(":engine-core"))
 }

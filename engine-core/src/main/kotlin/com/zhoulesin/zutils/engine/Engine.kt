@@ -8,6 +8,7 @@ import com.zhoulesin.zutils.engine.core.FunctionRegistry
 import com.zhoulesin.zutils.engine.dex.DexLoader
 import com.zhoulesin.zutils.engine.dex.DexSpec
 import com.zhoulesin.zutils.engine.llm.LlmClient
+import com.zhoulesin.zutils.engine.permissions.PermissionChecker
 import com.zhoulesin.zutils.engine.registry.DefaultFunctionRegistry
 import com.zhoulesin.zutils.engine.workflow.DefaultWorkflowEngine
 import com.zhoulesin.zutils.engine.workflow.Workflow
@@ -23,6 +24,7 @@ class Engine(
     val workflowEngine: WorkflowEngine = DefaultWorkflowEngine(),
     val dexLoader: DexLoader? = null,
     val llmClient: LlmClient? = null,
+    val permissionChecker: PermissionChecker? = null,
     var onPluginLoaded: ((name: String, version: String, className: String) -> Unit)? = null,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -37,6 +39,7 @@ class Engine(
             androidContext = androidContext,
             scope = scope,
             registry = registry,
+            permissionChecker = permissionChecker,
             requestRuntimePermissions = requestRuntimePermissions,
         )
         val result = workflowEngine.execute(workflow, context)
@@ -50,7 +53,6 @@ class Engine(
     private suspend fun resolveMissingFunctions(workflow: Workflow, log: MutableList<String>) {
         val loader = dexLoader ?: return
         for (step in workflow.steps) {
-            if (step.type == "mcp") continue
             if (registry.contains(step.function)) continue
 
             // Try: Server-provided DEX metadata (new flow — server owns manifest)

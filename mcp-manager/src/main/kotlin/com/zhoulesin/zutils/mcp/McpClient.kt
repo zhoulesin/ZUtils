@@ -16,14 +16,6 @@ data class McpToolInfo(
     val description: String = "",
 )
 
-object McpKnownTools {
-    val ALL: Set<String> = setOf(
-        "weather_current", "translate_text", "news_headlines",
-        "geo_location", "qrcode_generate", "web_search",
-        "email_send", "document_summarize",
-    )
-}
-
 class McpClient(
     private val baseUrl: String = "http://10.0.2.2:8080",
     private val client: OkHttpClient = OkHttpClient.Builder()

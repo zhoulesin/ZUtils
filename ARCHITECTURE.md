@@ -6,24 +6,22 @@
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                    UI Layer                           │
-│  app (ZUtils 演示)   office-app (ZOffice 产品壳)    │
-│  Compose + Material 3 + 3-Tab Navigation             │
-├─────────────────────────────────────────────────────┤
 │                  Agent/Workflow Layer                  │
-│  AgentExecution (LLM循环 / parseQuery关键词)          │
+│  AgentExecution (Server LLM 单轮 Workflow)              │
 │  AutomationEngine (WorkManager定时规则)               │
 ├─────────────────────────────────────────────────────┤
 │                  Function Registry                     │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐          │
 │  │  Local   │  │  MCP     │  │  DEX     │          │
 │  │Functions │  │  Tools   │  │  Plugins │          │
+│  │(模块)    │  │(模块)    │  │(模块)    │          │
 │  └────┬─────┘  └────┬─────┘  └────┬─────┘          │
 ├───────┼─────────────┼──────────────┼────────────────┤
 │       ▼             ▼              ▼                  │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐          │
 │  │ Registry │  │McpClient│  │ DexLoader│          │
-│  │ 直执行    │  │ HTTP Server│  │验签→注册→执行 │          │
+│  │ 直执行    │  │ HTTP Server│  │验签→注册→执行 │
+│  │          │  │          │  │ Bridge注入    │
 │  └──────────┘  └──────────┘  └──────────┘          │
 ├─────────────────────────────────────────────────────┤
 │               Engine Core (Facade)                    │
@@ -44,17 +42,14 @@
 ```
 用户输入 "北京今天天气"
   │
-  ├─ LLM 路径 (ServerLlmClient != null)
-  │   POST /api/v1/llm/chat → Server LlmService → 火山引擎豆包
-  │   ├─ ToolCall → 本地/MCP/DEX 执行 → 结果回送 LLM → 下一轮
-  │   └─ FinalAnswer → 展示
-  │
-  └─ 关键词路径 (LLM 不可用或失败)
-      parseQuery() 匹配关键词
-      └─ Workflow → Engine.execute()
-           ├─ MCP 工具 → McpClient.callTool() → Server MCP 服务
-           └─ 本地函数 → FunctionRegistry 直执行
+  └─ ServerLlmClient.parseIntent() → POST /api/v1/llm/parse
+      → Server LlmService → 火山引擎豆包
+      → 返回完整 Workflow: [weather_current, tts_speak]
+      → Engine.execute() → 线性执行每步
+      → LlmClient.summarize() → 展示结果
 ```
+
+> 无客户端多轮循环，无关键词匹配。所有函数（MCP/Local/DEX）均注册为 ZFunction，统一调度。
 
 ### 三种执行方式详细链路
 
@@ -81,7 +76,7 @@
 
 | 包 | 关键文件 | 职责 |
 |----|---------|------|
-| `core/` | `ZFunction`, `FunctionInfo`, `FunctionRegistry`, `ExecutionContext`, `ZResult`, `Parameter` | 核心接口与数据模型 |
+| `core/` | `ZFunction`, `FunctionInfo`, `FunctionRegistry`, `ExecutionContext`, `ZResult`, `Parameter` | 核心接口与数据模型（被 `:local-functions`、`:mcp-manager` 等模块依赖） |
 | `workflow/` | `Workflow`, `WorkflowStep`, `WorkflowEngine`, `DefaultWorkflowEngine`, `PipelineResolver` | 工作流定义与执行 |
 | `dex/` | `DexLoader`, `DexSpec`, `DexVerifier` | DEX 加载与签名验证接口 |
 | `llm/` | `LlmClient`, `ChatMessage`, `ChatResult` | LLM 客户端接口 |
@@ -91,23 +86,31 @@
 
 | 组件 | 职责 |
 |------|------|
-| `ZUtilsEngineBootstrap` | 引擎引导：注册 17 个内置函数、初始化自动化引擎、加载缓存的 DEX 插件 |
-| `AgentExecution` | Agent 编排：LLM 多轮对话循环 / parseQuery 关键词 fallback |
+| `ZUtilsEngineBootstrap` | 引擎引导：注册 16 个本地函数（来自 `:local-functions`）+ MCP 函数（来自 `:mcp-manager`）+ 自动化函数、初始化自动化引擎、加载缓存的 DEX 插件 |
+| `AgentExecution` | Agent：Server LLM parseIntent → Workflow → 线性执行 → 汇总，无多轮循环 |
 | `AutomationEngine` | 自动化规则管理：Cron 解析、WorkManager 调度、步骤类型推断（mcp/tool/local） |
-| `NotificationHelper` | 系统通知工具 |
+| `NotificationHelper` | → 已迁移至 `:local-functions` 模块 |
 | `ServerConfig` | 服务器地址常量（`http://10.0.2.2:8080`） |
 | `AgentModels` | `ResultContent`, `HistoryEntry`, `EntryType` |
 
-**注册的内置函数（17 个）：**
+### 3.2 local-functions — 本地函数
 
-`getDeviceInfo`, `getScreenInfo`, `getStorageInfo`, `getNetworkType`, `getClipboard`, `setClipboard`, `base64`, `readFile`, `writeFile`, `shareFile`, `send_notification`, `queryContacts`, `makePhoneCall`, `sendSms`, `createCalendarEvent`, `queryCalendarEvents`, `create_automation`
+| 组件 | 职责 |
+|------|------|
+| `functions/*.kt` | 16 个内置本地函数的 `ZFunction` 实现（设备信息、文件、日历、通讯录、短信等） |
+| `notification/NotificationHelper` | 系统通知工具 |
+
+**注册的内置函数（16 个）：**
+
+`getDeviceInfo`, `getScreenInfo`, `getStorageInfo`, `getNetworkType`, `getClipboard`, `setClipboard`, `base64`, `readFile`, `writeFile`, `shareFile`, `send_notification`, `queryContacts`, `makePhoneCall`, `sendSms`, `createCalendarEvent`, `queryCalendarEvents`
 
 ### 3.3 mcp-manager — MCP 客户端
 
 | 组件 | 职责 |
 |------|------|
 | `McpClient` | HTTP 客户端，连接 `POST /api/v1/mcp/call` 和 `GET /api/v1/mcp/tools` |
-| `McpKnownTools` | 8 个已知工具名硬编码集合 |
+| `McpFunction` | 实现 `ZFunction`，将 MCP 工具包装为本地可调用的函数（`execute()` 内调 `McpClient.callTool()`） |
+| `McpKnownTools` | 遗留常量集，仅 AutomationEngine 用于 type 推断 |
 
 **8 个 MCP 工具（Server 端实现）：**
 
@@ -119,7 +122,8 @@
 |------|------|
 | `DefaultDexLoader` | DEX 下载、SHA-256 验证、`InMemoryDexClassLoader` 加载 |
 | `DexFunctionAdapter` | 将 DEX 中 `handle(String): String` 方法包装为 ZFunction |
-| `BridgeDexAdapter` | 将 DEX 中 `execute(Map)` 方法包装为 ZFunction |
+| `BridgeDexAdapter` | 将 DEX 中 `execute(Map)` + `setApiBridge(ApiBridge)` 方法包装为 ZFunction |
+| `bridge/AppApiBridge` | `ApiBridge` 实现：通过反射调用 Android API，供 DEX 插件调用系统能力 |
 | `PluginInstallRepo` | 已安装插件的本地 DB 持久化 |
 | `PluginStorage` | 插件文件存储 |
 
@@ -156,12 +160,14 @@
 
 ### 架构选择
 
-采用 **Server 端 LLM** 方案（ZUtils Server `LlmService` 对接火山引擎豆包），Android 端通过 `ServerLlmClient` 调用。Server 不可用时 fallback 到关键词匹配。
+采用 **Server 端 LLM** 方案。Android 仅做一次性 `parseIntent` 获取完整 Workflow，然后线性执行，最后 `summarize` 结束。无客户端多轮循环。
 
 ```
-Android AgentExecution → ServerLlmClient → POST /api/v1/llm/chat
+Android AgentExecution → ServerLlmClient.parseIntent() → POST /api/v1/llm/parse
   → Server LlmService → 火山引擎方舟 /chat/completions
-  → 返回 ToolCall / FinalAnswer
+  → 返回完整 WorkflowStep[]
+  → Engine.execute() 逐个执行（MCP/Local/DEX 均在 FunctionRegistry 中）
+  → LlmClient.summarize() → 展示
 ```
 
 ### 双客户端
@@ -171,12 +177,14 @@ Android AgentExecution → ServerLlmClient → POST /api/v1/llm/chat
 | `ServerLlmClient` | `http://10.0.2.2:8080/api/v1/llm/*` | 开发/生产（Server 代理 LLM，可共享函数池） |
 | `VolcengineLlmClient` | `https://ark.cn-beijing.volces.com` | 直连火山（API Key 配置在端上） |
 
-### Agent 多轮对话
+### 单次执行
 
-`AgentExecution.runQuery()` 执行 LLM 多轮循环：
-1. 发送用户输入 + 可用函数列表 → LLM
-2. LLM 返回 ToolCall → 本地/MCP 执行 → 结果回送 LLM
-3. 重复直到 LLM 返回 FinalAnswer
+`AgentExecution.runQuery()` 执行流程：
+1. `ServerLlmClient.parseIntent()` → 从 Server 获取完整 `Workflow`
+2. `Engine.execute(Workflow)` → 线性执行全部步骤
+3. `ServerLlmClient.summarize()` → 获取执行摘要
+
+> 不再需要多轮循环。MCP 工具已注册为 `McpFunction`，与 Local/DEX 函数同等待遇。
 
 ---
 

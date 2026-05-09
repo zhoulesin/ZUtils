@@ -11,7 +11,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
 import com.zhoulesin.zutils.data.AutomationRule
-import com.zhoulesin.zutils.engine.AutomationEngine
+import com.zhoulesin.zutils.engine.AndroidAutomationEngine
 import com.zhoulesin.zutils.ui.theme.RaycastBlueTransparent
 import com.zhoulesin.zutils.ui.theme.RaycastCardSurface
 import com.zhoulesin.zutils.ui.theme.RaycastWhiteBorder06
@@ -19,7 +19,7 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun AutomationRulesScreen(
-    autoEngine: AutomationEngine,
+    autoEngine: AndroidAutomationEngine,
     modifier: Modifier = Modifier,
 ) {
     var rules by remember { mutableStateOf<List<AutomationRule>>(emptyList()) }
@@ -57,7 +57,7 @@ fun AutomationRulesScreen(
 @Composable
 private fun AutomationRuleCard(
     rule: AutomationRule,
-    autoEngine: AutomationEngine,
+    autoEngine: AndroidAutomationEngine,
     onChanged: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()

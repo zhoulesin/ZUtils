@@ -4,37 +4,26 @@ import android.content.Context
 import androidx.work.*
 import com.zhoulesin.zutils.data.AutomationRule
 import com.zhoulesin.zutils.data.AutomationRuleDao
-import com.zhoulesin.zutils.mcp.McpKnownTools
+import com.zhoulesin.zutils.engine.core.FunctionRegistry
+import com.zhoulesin.zutils.engine.core.FunctionSource
 import com.zhoulesin.zutils.workers.AutomationWorker
 import kotlinx.serialization.json.*
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
-class AutomationEngine(
+class AndroidAutomationEngine(
     private val context: Context,
     private val dao: AutomationRuleDao,
+    private val registry: FunctionRegistry? = null,
     private val serverBaseUrl: String = com.zhoulesin.zutils.config.ServerConfig.DEFAULT_BASE_URL,
-) {
+) : com.zhoulesin.zutils.engine.automation.AutomationEngine {
     private val json = Json { ignoreUnknownKeys = true }
-
-    companion object {
-        val MCP_TOOLS: Set<String> = McpKnownTools.ALL
-    }
-
-    /**
-     * 三种类型（执行时）：
-     *   mcp   → Worker 做 HTTP 调服务器 /api/v1/mcp/call
-     *   tool  → Engine.resolveMissingFunctions() → DexLoader 下载 → 注册 → 执行
-     *   local → FunctionRegistry 已有 → 直接执行
-     *
-     * 保存 enrich 时只区分 mcp / 非 mcp，tool 和 local 运行时由 Engine 自行分辨。
-     */
 
     suspend fun loadAll(): List<AutomationRule> = dao.loadAll()
 
     suspend fun getById(id: String): AutomationRule? = dao.getById(id)
 
-    suspend fun create(name: String, cron: String, rawStepsJson: String): AutomationRule {
+    override suspend fun create(name: String, cron: String, rawStepsJson: String): com.zhoulesin.zutils.engine.automation.AutomationEngine.CreatedRule {
         val enriched = enrichStepsWithType(rawStepsJson)
         val rule = AutomationRule(
             id = UUID.randomUUID().toString().take(8),
@@ -44,7 +33,7 @@ class AutomationEngine(
         )
         dao.insert(rule)
         schedule(rule)
-        return rule
+        return com.zhoulesin.zutils.engine.automation.AutomationEngine.CreatedRule(rule.id, rule.name, rule.cron)
     }
 
     suspend fun toggle(id: String, enabled: Boolean) {
@@ -74,9 +63,9 @@ class AutomationEngine(
                 val function = obj["function"]?.jsonPrimitive?.contentOrNull
                     ?: obj["name"]?.jsonPrimitive?.contentOrNull ?: ""
                 if (obj["type"] == null) {
-                    val inferredType = if (function in MCP_TOOLS) "mcp" else "local"
+                    val isMcp = registry?.get(function)?.info?.source == FunctionSource.REMOTE
+                    val inferredType = if (isMcp) "mcp" else "local"
                     buildJsonObject {
-                        // copy all fields with key normalization
                         for ((k, v) in obj) {
                             val key = when {
                                 k == "name" && obj["function"] == null -> "function"

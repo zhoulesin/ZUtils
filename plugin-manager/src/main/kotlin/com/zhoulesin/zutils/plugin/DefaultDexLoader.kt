@@ -212,7 +212,7 @@ class DefaultDexLoader(
             // Inject ApiBridge if the DEX class supports it
             try {
                 val setBridge = clazz.getMethod("setApiBridge", Any::class.java)
-                val bridgeClass = Class.forName("com.zhoulesin.zutils.bridge.AppApiBridge")
+                val bridgeClass = Class.forName("com.zhoulesin.zutils.plugin.bridge.AppApiBridge")
                 val bridge = bridgeClass.getField("INSTANCE").get(null)
                 setBridge.invoke(instance, bridge)
                 Log.i(TAG, "ApiBridge injected into ${spec.className}")

@@ -58,11 +58,8 @@ import com.zhoulesin.zutils.compose.rememberRuntimePermissionRequester
 import com.zhoulesin.zutils.agent.EntryType
 import com.zhoulesin.zutils.agent.HistoryEntry
 import com.zhoulesin.zutils.agent.ResultContent
-import com.zhoulesin.zutils.config.ServerConfig
 import com.zhoulesin.zutils.data.WorkflowStorage
 import com.zhoulesin.zutils.engine.Engine
-import com.zhoulesin.zutils.engine.llm.LlmClient
-import com.zhoulesin.zutils.llm.ServerLlmClient
 import com.zhoulesin.zutils.ui.screen.AutomationRulesScreen
 import com.zhoulesin.zutils.ui.screen.CapabilitiesScreen
 import com.zhoulesin.zutils.ui.screen.WorkflowBuilderScreen
@@ -80,11 +77,10 @@ fun MainScreen(engine: Engine, topBarTitle: String = "ZUtils") {
     val scope = rememberCoroutineScope()
     var showBuilder by remember { mutableStateOf(false) }
     val storage = remember { WorkflowStorage(engine.androidContext) }
-    val serverBaseUrl = com.zhoulesin.zutils.config.ServerConfig.DEFAULT_BASE_URL
-    val llmClient = remember { ServerLlmClient(serverBaseUrl) }
+    val llmClient = engine.llmClient
     val db = remember { com.zhoulesin.zutils.data.DatabaseProvider.get(engine.androidContext) }
     val autoDao = remember { db.automationRuleDao() }
-    val autoEngine = remember { com.zhoulesin.zutils.engine.AutomationEngine(engine.androidContext, autoDao) }
+    val autoEngine = remember { com.zhoulesin.zutils.engine.AndroidAutomationEngine(engine.androidContext, autoDao) }
 
     if (showBuilder) {
         WorkflowBuilderScreen(
