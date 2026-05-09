@@ -17,6 +17,7 @@ import com.zhoulesin.zutils.functions.MakePhoneCallFunction
 import com.zhoulesin.zutils.functions.QueryCalendarEventsFunction
 import com.zhoulesin.zutils.functions.QueryContactsFunction
 import com.zhoulesin.zutils.functions.ReadFileFunction
+import com.zhoulesin.zutils.functions.ReadSmsFunction
 import com.zhoulesin.zutils.functions.SendNotificationFunction
 import com.zhoulesin.zutils.functions.SendSmsFunction
 import com.zhoulesin.zutils.functions.SetClipboardFunction
@@ -77,6 +78,7 @@ object ZUtilsEngineBootstrap {
             it.registry.register(QueryContactsFunction())
             it.registry.register(MakePhoneCallFunction())
             it.registry.register(SendSmsFunction())
+            it.registry.register(ReadSmsFunction())
             it.registry.register(ReadFileFunction())
             it.registry.register(WriteFileFunction())
             it.registry.register(ShareFileFunction())

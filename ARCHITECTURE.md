@@ -86,7 +86,7 @@
 
 | 组件 | 职责 |
 |------|------|
-| `ZUtilsEngineBootstrap` | 引擎引导：注册 16 个本地函数（来自 `:local-functions`）+ MCP 函数（来自 `:mcp-manager`）+ 自动化函数、初始化自动化引擎、加载缓存的 DEX 插件 |
+| `ZUtilsEngineBootstrap` | 引擎引导：注册 17 个本地函数（来自 `:local-functions`）+ MCP 函数（来自 `:mcp-manager`）+ 自动化函数、初始化自动化引擎、加载缓存的 DEX 插件 |
 | `AgentExecution` | Agent：Server LLM parseIntent → Workflow → 线性执行 → 汇总，无多轮循环 |
 | `AutomationEngine` | 自动化规则管理：Cron 解析、WorkManager 调度、步骤类型推断（mcp/tool/local） |
 | `NotificationHelper` | → 已迁移至 `:local-functions` 模块 |
@@ -97,12 +97,12 @@
 
 | 组件 | 职责 |
 |------|------|
-| `functions/*.kt` | 16 个内置本地函数的 `ZFunction` 实现（设备信息、文件、日历、通讯录、短信等） |
+| `functions/*.kt` | 17 个内置本地函数的 `ZFunction` 实现（设备信息、文件、日历、通讯录、短信等） |
 | `notification/NotificationHelper` | 系统通知工具 |
 
 **注册的内置函数（16 个）：**
 
-`getDeviceInfo`, `getScreenInfo`, `getStorageInfo`, `getNetworkType`, `getClipboard`, `setClipboard`, `base64`, `readFile`, `writeFile`, `shareFile`, `send_notification`, `queryContacts`, `makePhoneCall`, `sendSms`, `createCalendarEvent`, `queryCalendarEvents`
+`getDeviceInfo`, `getScreenInfo`, `getStorageInfo`, `getNetworkType`, `getClipboard`, `setClipboard`, `base64`, `readFile`, `writeFile`, `shareFile`, `send_notification`, `readSms`, `queryContacts`, `makePhoneCall`, `sendSms`, `createCalendarEvent`, `queryCalendarEvents`
 
 ### 3.3 mcp-manager — MCP 客户端
 

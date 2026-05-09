@@ -21,7 +21,7 @@
 
 | 模块 | 函数 |
 |------|------|
-| `:local-functions` | `getDeviceInfo`, `getScreenInfo`, `getStorageInfo`, `getNetworkType`, `getClipboard`, `setClipboard`, `base64`, `readFile`, `writeFile`, `shareFile`, `send_notification`, `queryContacts`, `makePhoneCall`, `sendSms`, `createCalendarEvent`, `queryCalendarEvents` |
+| `:local-functions` | `getDeviceInfo`, `getScreenInfo`, `getStorageInfo`, `getNetworkType`, `getClipboard`, `setClipboard`, `base64`, `readFile`, `writeFile`, `shareFile`, `send_notification`, `readSms`, `queryContacts`, `makePhoneCall`, `sendSms`, `createCalendarEvent`, `queryCalendarEvents` |
 | `:application-shell` | `create_automation` |
 
 ### MCP 工具（8 个，Server 端）

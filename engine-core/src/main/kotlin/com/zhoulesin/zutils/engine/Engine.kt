@@ -5,6 +5,7 @@ import android.util.Log
 import com.zhoulesin.zutils.engine.core.ExecutionContext
 import com.zhoulesin.zutils.engine.core.FunctionInfo
 import com.zhoulesin.zutils.engine.core.FunctionRegistry
+import com.zhoulesin.zutils.engine.core.FunctionSource
 import com.zhoulesin.zutils.engine.dex.DexLoader
 import com.zhoulesin.zutils.engine.dex.DexSpec
 import com.zhoulesin.zutils.engine.llm.LlmClient
