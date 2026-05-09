@@ -17,7 +17,8 @@ data class McpToolInfo(
 )
 
 class McpClient(
-    private val baseUrl: String = "http://10.0.2.2:8080",
+//    private val baseUrl: String = "http://10.0.2.2:8080",
+    private val baseUrl: String = "http://192.168.10.3:8080",
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)

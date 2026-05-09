@@ -41,13 +41,14 @@ class UiAutomationEngine {
             ?: return UiResult.Failure(-1, "无障碍服务未开启，请到 设置→无障碍 中开启 ZOffice")
 
         for ((i, step) in steps.withIndex()) {
-            Thread.sleep(400)
+            Thread.sleep(800)
             val ok = runCatching { executeStep(service, step) }.getOrDefault(false)
+            val screen = service.getScreenText().lines().filter { it.isNotBlank() }.take(20).joinToString(" | ")
+            Log.i(TAG, "Step $i: ${step.action} '${step.target}' → ok=$ok | screen=$screen")
             if (!ok) {
                 Log.w(TAG, "Step $i failed: ${step.action} ${step.target}")
                 return UiResult.Failure(i, "步骤 $i 执行失败: ${step.action} '${step.target}'")
             }
-            Log.i(TAG, "Step $i OK: ${step.action} '${step.target}'")
         }
         return UiResult.Success("全部步骤执行完成 (${steps.size} 步)")
     }
@@ -64,17 +65,14 @@ class UiAutomationEngine {
             service.clickByContentDesc(step.target)
         }
         UiStep.TAP_SEND -> {
-            // 微信/钉钉发送按钮
-            service.clickByContentDesc("发送") || service.clickByText("发送")
+            service.clickByText("发送") || service.clickByContentDesc("发送")
         }
         UiStep.TAP_ATTACH -> {
-            // 附件按钮
-            service.clickByContentDesc("更多") || service.clickByContentDesc("附件") ||
+            service.clickByText("更多") || service.clickByText("附件") ||
                 service.clickByText("+")
         }
         UiStep.TAP_SEARCH -> {
-            // 搜索按钮
-            service.clickByContentDesc("搜索") || service.clickByContentDesc("search")
+            service.clickByText("搜索") || service.clickByText("Search")
         }
         else -> {
             Log.w(TAG, "Unknown action: ${step.action}")
@@ -91,20 +89,19 @@ class UiAutomationEngine {
         return execute(listOf(
             UiStep(UiStep.OPEN_APP, "com.tencent.mm"),
             UiStep(UiStep.TAP_SEARCH),
-            UiStep(UiStep.INPUT, "搜索", targetName),
+            UiStep(UiStep.INPUT, "", targetName),
             UiStep(UiStep.CLICK, targetName),
-            UiStep(UiStep.INPUT, "输入", message),
+            UiStep(UiStep.INPUT, "", message),
             UiStep(UiStep.TAP_SEND),
         ))
     }
 
-    // 指令 2：打开通讯录 → 搜索联系人 → 读号码
     fun findContact(name: String): String {
         val service = UiAutomationService.instance ?: return "无障碍服务未开启"
         runCatching {
             service.openApp("com.android.contacts")
             service.clickByText("搜索")
-            service.inputText("搜索", name)
+            service.inputText("", name)
             Thread.sleep(800)
             return service.getScreenText()
         }

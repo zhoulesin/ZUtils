@@ -17,13 +17,25 @@ class UiAutomationService : AccessibilityService() {
         @Volatile var instance: UiAutomationService? = null
     }
 
+    @Volatile
+    private var pendingWindowPackage: String? = null
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
         Log.i(TAG, "Accessibility service connected")
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event != null) {
+            Log.i(TAG, "onAccessibilityEvent: type=${event.eventType} pkg=${event.packageName}")
+            val pending = pendingWindowPackage
+            if (pending != null && event.packageName?.toString() == pending) {
+                pendingWindowPackage = null
+                Log.i(TAG, "onAccessibilityEvent: matched pending '$pending'")
+            }
+        }
+    }
 
     override fun onInterrupt() {}
 
@@ -37,29 +49,64 @@ class UiAutomationService : AccessibilityService() {
     }
 
     fun clickByText(text: String): Boolean {
-        val nodes = rootInActiveWindow?.findAccessibilityNodeInfosByText(text) ?: return false
+        val allNodes = rootInActiveWindow?.findAccessibilityNodeInfosByText(text) ?: return false
+        // Prefer nodes whose text property actually matches; fall back to fuzzy if none
+        val exactNodes = allNodes.filter { it.text?.toString()?.contains(text) == true }
+        val nodes = if (exactNodes.isNotEmpty()) exactNodes else allNodes
+        Log.i(TAG, "clickByText($text): found ${nodes.size} nodes (${exactNodes.size} exact, ${allNodes.size} fuzzy)")
+        nodes.forEachIndexed { i, n ->
+            val r = android.graphics.Rect()
+            n.getBoundsInScreen(r)
+            Log.i(TAG, "  [$i] text='${n.text}' contentDesc='${n.contentDescription}' className='${n.className}' clickable=${n.isClickable} bounds=$r")
+        }
         val clickable = nodes.firstOrNull { it.isClickable } ?: nodes.firstOrNull()
         val clicked = clickable?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true
-        nodes.forEach { it.recycle() }
+        Log.i(TAG, "clickByText($text): clicked=${clicked}, chosen text='${clickable?.text}' desc='${clickable?.contentDescription}'")
+        allNodes.forEach { it.recycle() }
         return clicked
     }
 
     fun clickByContentDesc(desc: String): Boolean {
-        val nodes = rootInActiveWindow?.findAccessibilityNodeInfosByViewId(desc)
-            ?: return false
-        val clicked = nodes.firstOrNull()?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true
-        nodes.forEach { it.recycle() }
+        val allNodes = rootInActiveWindow?.findAccessibilityNodeInfosByText(desc) ?: return false
+        val matched = allNodes.filter { desc.equals(it.contentDescription?.toString(), ignoreCase = true) }
+        if (matched.isEmpty()) { allNodes.forEach { it.recycle() }; return false }
+        val target = matched.firstOrNull { it.isClickable } ?: matched.firstOrNull()
+        val clicked = target?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true
+        allNodes.forEach { it.recycle() }
         return clicked
     }
 
     fun inputText(target: String, value: String): Boolean {
-        val inputNode = findFocusedEditable() ?: findEditableOnScreen(target)
-        if (inputNode == null) {
-            // Try focus by clicking first
-            if (!clickByText(target)) return false
-            Thread.sleep(300)
+        var focused = findFocusedEditable()
+        Log.i(TAG, "inputText: focused=$focused")
+        if (focused == null) {
+            val editable = findEditableOnScreen(target)
+            Log.i(TAG, "inputText: editableOnScreen($target)=$editable")
+            if (editable == null) {
+                if (target.isNotEmpty()) {
+                    val clicked = clickByText(target)
+                    Log.i(TAG, "inputText: clickByText($target)=$clicked")
+                    if (!clicked) return false
+                }
+                for (attempt in 1..3) {
+                    Thread.sleep(500)
+                    focused = findFocusedEditable()
+                    Log.i(TAG, "inputText: retry $attempt, focused=$focused")
+                    if (focused != null) break
+                    // Also try finding any editable on screen (not just focused)
+                    val anyEdit = findEditableOnScreen("")
+                    if (anyEdit != null) {
+                        Log.i(TAG, "inputText: found un-focused editable, clicking to focus")
+                        anyEdit.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+                        focused = anyEdit
+                        break
+                    }
+                }
+            }
         }
-        val node = findFocusedEditable() ?: return false
+        if (focused == null) focused = findFocusedEditable()
+        Log.i(TAG, "inputText: after focus, focused=$focused")
+        val node = focused ?: return false
         val args = Bundle().apply {
             putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, value)
         }
@@ -70,10 +117,27 @@ class UiAutomationService : AccessibilityService() {
 
     fun openApp(packageName: String): Boolean {
         val intent = packageManager.getLaunchIntentForPackage(packageName)
-            ?: return false
+        if (intent == null) {
+            val pkgInfo = try {
+                packageManager.getPackageInfo(packageName, 0)
+            } catch (_: Exception) { null }
+            Log.w(TAG, "openApp: getLaunchIntentForPackage('$packageName')=null, pkgInfo=$pkgInfo")
+            return false
+        }
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         startActivity(intent)
-        Thread.sleep(1000)
+
+        pendingWindowPackage = packageName
+        val deadline = System.currentTimeMillis() + 6000
+        while (pendingWindowPackage != null && System.currentTimeMillis() < deadline) {
+            Thread.sleep(100)
+        }
+        if (pendingWindowPackage != null) {
+            Log.w(TAG, "openApp: timeout waiting for event for '$packageName'")
+            pendingWindowPackage = null
+            return false
+        }
+        Thread.sleep(500)
         return true
     }
 
@@ -106,11 +170,18 @@ class UiAutomationService : AccessibilityService() {
     }
 
     fun getScreenText(): String {
-        val root = rootInActiveWindow ?: return ""
+        val root = rootInActiveWindow
+        if (root == null) {
+            Log.i(TAG, "getScreenText: rootInActiveWindow=null")
+            return ""
+        }
+        Log.i(TAG, "getScreenText: root pkg=${root.packageName} className=${root.className} childCount=${root.childCount}")
         val sb = StringBuilder()
         collectText(root, sb)
         root.recycle()
-        return sb.toString()
+        val text = sb.toString()
+        Log.i(TAG, "getScreenText: ${text.length} chars, first 200=${text.take(200)}")
+        return text
     }
 
     fun tap(x: Float, y: Float): Boolean {
@@ -144,7 +215,16 @@ class UiAutomationService : AccessibilityService() {
     }
 
     private fun findEditableNode(node: AccessibilityNodeInfo, target: String): AccessibilityNodeInfo? {
-        if (node.isEditable && node.text?.contains(target) == true) return node
+        if (node.isEditable) {
+            Log.i(TAG, "findEditableNode: editable node text='${node.text}' hint='${node.hintText}' contentDesc='${node.contentDescription}'")
+            val text = node.text?.toString() ?: ""
+            val hint = node.hintText?.toString() ?: ""
+            if (text.contains(target) || hint.contains(target)) return node
+        }
+        if (node.className?.toString()?.contains("EditText") == true) {
+            Log.i(TAG, "findEditableNode: EditText found, returning it regardless of text match")
+            return node
+        }
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
             val result = findEditableNode(child, target)

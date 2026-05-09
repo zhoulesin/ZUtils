@@ -16,4 +16,5 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.serialization.json)
     api(project(":engine-core"))
+    implementation(project(":ui-automation"))
 }

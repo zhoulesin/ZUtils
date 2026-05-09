@@ -46,6 +46,8 @@ object AgentExecution {
             push("   ${i + 1}. ${step.function}")
         }
 
+        val resultType = workflow.steps.firstOrNull()?.let { inferResultType(it.function) } ?: "text"
+
         val workflowResult = engine.execute(
             workflow = workflow,
             requestRuntimePermissions = requestRuntimePermissions,
@@ -70,6 +72,17 @@ object AgentExecution {
         logs.append("✅ $summary")
         push("✅ $summary")
 
-        return ResultContent.Text(logs.toString())
+        return ResultContent.Text(logs.toString(), resultType = resultType)
+    }
+
+    private fun inferResultType(functionName: String): String = when {
+        functionName.contains("weather", ignoreCase = true) -> "weather"
+        functionName.contains("calendar", ignoreCase = true) || functionName.contains("event", ignoreCase = true) -> "calendar"
+        functionName.contains("contact", ignoreCase = true) -> "contact"
+        functionName.contains("file", ignoreCase = true) -> "file"
+        functionName.contains("sms", ignoreCase = true) || functionName.contains("phone", ignoreCase = true)
+            || functionName.contains("wechat", ignoreCase = true) -> "contact"
+        functionName.startsWith("email") -> "text"
+        else -> "text"
     }
 }

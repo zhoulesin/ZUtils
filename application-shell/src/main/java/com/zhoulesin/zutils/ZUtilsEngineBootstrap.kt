@@ -20,6 +20,7 @@ import com.zhoulesin.zutils.functions.ReadFileFunction
 import com.zhoulesin.zutils.functions.ReadSmsFunction
 import com.zhoulesin.zutils.functions.SendNotificationFunction
 import com.zhoulesin.zutils.functions.SendSmsFunction
+import com.zhoulesin.zutils.functions.SendWeChatMessageFunction
 import com.zhoulesin.zutils.functions.SetClipboardFunction
 import com.zhoulesin.zutils.functions.ShareFileFunction
 import com.zhoulesin.zutils.functions.WriteFileFunction
@@ -78,6 +79,7 @@ object ZUtilsEngineBootstrap {
             it.registry.register(QueryContactsFunction())
             it.registry.register(MakePhoneCallFunction())
             it.registry.register(SendSmsFunction())
+            it.registry.register(SendWeChatMessageFunction())
             it.registry.register(ReadSmsFunction())
             it.registry.register(ReadFileFunction())
             it.registry.register(WriteFileFunction())

@@ -52,11 +52,74 @@ interface InstalledPluginDao {
     suspend fun delete(functionName: String)
 }
 
-@Database(entities = [WorkflowEntity::class, InstalledPluginEntity::class, AutomationRule::class], version = 3)
+@Entity(tableName = "sessions")
+data class SessionEntity(
+    @PrimaryKey val id: String,
+    val title: String,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis(),
+    val messageCount: Int = 0,
+)
+
+@Dao
+interface SessionDao {
+    @Query("SELECT * FROM sessions ORDER BY updatedAt DESC")
+    fun getAll(): Flow<List<SessionEntity>>
+
+    @Query("SELECT * FROM sessions ORDER BY updatedAt DESC")
+    suspend fun getAllList(): List<SessionEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(session: SessionEntity)
+
+    @Query("UPDATE sessions SET title = :title, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun updateTitle(id: String, title: String, updatedAt: Long = System.currentTimeMillis())
+
+    @Query("UPDATE sessions SET messageCount = messageCount + 1, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun incrementMessageCount(id: String, updatedAt: Long = System.currentTimeMillis())
+
+    @Delete
+    suspend fun delete(session: SessionEntity)
+
+    @Query("DELETE FROM messages WHERE sessionId = :sessionId")
+    suspend fun cascadeDeleteMessages(sessionId: String)
+}
+
+@Entity(tableName = "messages")
+data class MessageEntity(
+    @PrimaryKey val id: String,
+    val sessionId: String,
+    val query: String,
+    val displayText: String,
+    val resultType: String,
+    val timestamp: Long = System.currentTimeMillis(),
+)
+
+@Dao
+interface MessageDao {
+    @Query("SELECT * FROM messages WHERE sessionId = :sessionId ORDER BY timestamp ASC")
+    fun getBySessionId(sessionId: String): Flow<List<MessageEntity>>
+
+    @Query("SELECT * FROM messages WHERE sessionId = :sessionId ORDER BY timestamp ASC")
+    suspend fun getBySessionIdList(sessionId: String): List<MessageEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(message: MessageEntity)
+
+    @Query("DELETE FROM messages WHERE id = :id")
+    suspend fun delete(id: String)
+}
+
+@Database(
+    entities = [WorkflowEntity::class, InstalledPluginEntity::class, AutomationRule::class, SessionEntity::class, MessageEntity::class],
+    version = 4,
+)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun workflowDao(): WorkflowDao
     abstract fun installedPluginDao(): InstalledPluginDao
     abstract fun automationRuleDao(): AutomationRuleDao
+    abstract fun sessionDao(): SessionDao
+    abstract fun messageDao(): MessageDao
 }
 
 @Serializable
