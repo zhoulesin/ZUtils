@@ -47,6 +47,8 @@ object PipelineResolver {
     }
 
     private fun navigateJson(element: JsonElement, path: String): JsonElement? {
+        // {0.result} — "result" 表示取 step 的完整输出，直接返回
+        if (path == "result") return element
         val parts = path.split(".").dropWhile { it.isEmpty() }
         var current = element
         for (part in parts) {

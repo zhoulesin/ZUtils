@@ -85,8 +85,15 @@ class ServerLlmClient(
                 val argsObj = obj["args"]?.jsonObject ?: JsonObject(emptyMap())
                 val stepType = obj["type"]?.jsonPrimitive?.contentOrNull ?: "local"
                 val stepResult = obj["result"]?.jsonPrimitive?.contentOrNull
+                val pipelineObj = obj["pipeline"]?.jsonObject
+                val pipeline = pipelineObj?.entries?.associate { (k, v) ->
+                    k to v.jsonPrimitive.contentOrNull.orEmpty()
+                } ?: emptyMap()
+                if (pipeline.isNotEmpty()) {
+                    android.util.Log.i("ZUtils-LLM", "  ↳ step[$i] pipeline: $pipeline")
+                }
                 WorkflowStep(id = i, function = name, args = argsObj,
-                    type = stepType, result = stepResult)
+                    type = stepType, result = stepResult, pipeline = pipeline)
             }
             Workflow(steps = steps, summary = userInput)
 

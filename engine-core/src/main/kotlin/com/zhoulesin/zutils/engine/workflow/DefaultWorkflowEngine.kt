@@ -127,6 +127,7 @@ class DefaultWorkflowEngine : WorkflowEngine {
             // pipeline：将上一步的输出注入当前步骤的入参
             val mergedArgs = if (step.pipeline.isNotEmpty()) {
                 val pipelineValues = PipelineResolver.resolve(step.pipeline, pipelineResults)
+                android.util.Log.i("ZUtils-Engine", "step[$index] pipeline resolve: ${step.pipeline} → $pipelineValues")
                 JsonObject(step.args + pipelineValues)
             } else {
                 step.args
@@ -156,6 +157,7 @@ class DefaultWorkflowEngine : WorkflowEngine {
             // 成功则记入 pipelineResults，供后续步骤引用
             if (stepResult is ZResult.Success) {
                 pipelineResults[index] = stepResult.data
+                android.util.Log.i("ZUtils-Engine", "step[$index] result stored, pipelineResults keys: ${pipelineResults.keys}")
             }
 
             // 失败则中断
